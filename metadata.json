@@ -1,0 +1,6 @@
+{
+  "name": "UniSpace-CX — Omni Dashboard",
+  "description": "Bảng điều khiển giám sát đa kênh thời gian thực (Centralized Omni Dashboard) cho hệ thống Contact Center UniSpace-CX.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
