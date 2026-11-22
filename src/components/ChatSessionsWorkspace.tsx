@@ -1,17 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertTriangle,
   ArrowLeftRight,
   ArrowUpCircle,
+  BellRing,
   Check,
   CheckCircle2,
   Clock,
   Copy,
   Edit3,
-  FilePlus2,
   Image as ImageIcon,
   Layers,
-  ListFilter,
   MessageSquare,
   MessageSquareText,
   PanelLeftClose,
@@ -175,9 +173,7 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
   const [selectedId, setSelectedId] = useState<string>('chat-act-2');
   const [statusFilter, setStatusFilter] = useState<StatusFilterKey>('all-open');
   const [channelFilter, setChannelFilter] = useState<'all' | ChatChannelType>('all');
-  const [priorityFilter, setPriorityFilter] = useState<'all' | 'urgent' | 'normal'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
 
   // 10-session load simulation toggle (STT 34)
   const [loadTestEnabled, setLoadTestEnabled] = useState(false);
@@ -375,18 +371,17 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
   const matchesFilters = useCallback(
     (s: ChatSessionRecord) => {
       if (channelFilter !== 'all' && s.channel !== channelFilter) return false;
-      if (priorityFilter !== 'all' && s.priority !== priorityFilter) return false;
       if (!searchQuery.trim()) return true;
       const q = stripVietnameseAccents(searchQuery.trim());
       const customerTexts = s.linkedCustomers
         .map((c) => `${c.name} ${c.phone} ${c.cif}`)
         .join(' ');
       const hay = stripVietnameseAccents(
-        `${customerTexts} ${s.senderId} ${s.interactionCode} ${s.lastMessagePreview} ${s.queueName}`
+        `${customerTexts} ${s.senderId} ${s.interactionCode} ${s.lastMessagePreview}`
       );
       return hay.includes(q);
     },
-    [channelFilter, priorityFilter, searchQuery]
+    [channelFilter, searchQuery]
   );
 
   // Filtered & priority-sorted list (urgent first, then overdue SLA first)
@@ -415,6 +410,62 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
     () => visibleSessions.filter((s) => s.lifecycleStatus === 'completed'),
     [visibleSessions]
   );
+
+  const handleSimulateUnreadMessage = () => {
+    const sampleCustomerReplies = [
+      'Em ơi kiểm tra giúp mình giao dịch này đã hoàn tất chưa ạ?',
+      'Mình vừa nhận được SMS xác nhận rồi, nhờ bạn kiểm tra giúp nhé.',
+      'Cho mình hỏi thêm về biểu phí chuyển khoản quốc tế được không ạ?',
+      'Bạn ơi mình vẫn đang đợi phản hồi nhé, có thông tin mới báo mình nha.',
+    ];
+    const candidates = sessions.filter(
+      (s) => s.lifecycleStatus === 'accepted' && s.id !== selectedId
+    );
+    const target =
+      candidates.find((s) => s.unreadCount === 0) ??
+      candidates[0] ??
+      sessions.find((s) => s.lifecycleStatus !== 'completed' && s.id !== selectedId);
+
+    if (!target) {
+      onNotify?.('Không có phiên khác đang mở để giả lập tin nhắn mới.');
+      return;
+    }
+
+    const nowHm = getNowHm();
+    const replyText =
+      sampleCustomerReplies[target.messages.length % sampleCustomerReplies.length];
+    const activeCust =
+      target.linkedCustomers.find((c) => c.id === target.activeCustomerId) ??
+      target.linkedCustomers[0];
+
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === target.id
+          ? {
+              ...s,
+              unreadCount: s.unreadCount + 1,
+              lastMessageTime: nowHm,
+              lastMessagePreview: replyText,
+              customerWaitSec: s.customerWaitSec > 0 ? s.customerWaitSec : 5,
+              messages: [
+                ...s.messages,
+                {
+                  id: `m-sim-${Date.now()}`,
+                  sender: 'customer',
+                  senderLabel: (activeCust?.name || 'KHÁCH HÀNG').toUpperCase(),
+                  roleTag: 'KHÁCH HÀNG',
+                  time: nowHm,
+                  text: replyText,
+                },
+              ],
+            }
+          : s
+      )
+    );
+    onNotify?.(
+      `${activeCust?.name ?? 'Khách hàng'} vừa gửi 1 tin nhắn mới (chưa đọc).`
+    );
+  };
 
   const handleToggleLoadTest = () => {
     if (!loadTestEnabled) {
@@ -947,6 +998,8 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
     const draft = draftsBySession[chat.id]?.trim();
     const sla = computeSlaInfo(chat);
 
+    const hasUnread = chat.unreadCount > 0;
+
     return (
       <button
         key={chat.id}
@@ -955,6 +1008,8 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
         className={`w-full px-3 py-2.5 text-left flex items-start gap-2.5 transition-colors relative ${
           isSelected
             ? 'bg-[#F4F5FC] ring-1 ring-inset ring-[#3B49DF]'
+            : hasUnread
+            ? 'bg-[#F8FAFF] hover:bg-[#F1F5FF]'
             : 'bg-white hover:bg-[#F8FAFC]'
         }`}
       >
@@ -978,70 +1033,47 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
                 className={`text-[13px] truncate ${
                   isSelected
                     ? 'font-bold text-[#3B49DF]'
-                    : chat.unreadCount > 0
-                    ? 'font-bold text-slate-900'
-                    : 'font-semibold text-slate-800'
+                    : hasUnread
+                    ? 'font-extrabold text-slate-950'
+                    : 'font-medium text-slate-700'
                 }`}
               >
                 {rowCustomer?.name}
               </span>
-              {chat.linkedCustomers.length > 1 && (
-                <span
-                  className="text-[10px] font-mono font-bold text-[#3B49DF] bg-[#EEF2FF] px-1 rounded shrink-0"
-                  title={`1 SenderID gắn ${chat.linkedCustomers.length} hồ sơ khách hàng`}
-                >
-                  {chat.linkedCustomers.length} KH
-                </span>
-              )}
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-[11px] font-mono tabular-nums text-slate-400">
-                {chat.lastMessageTime}
-              </span>
-              {/* Numeric unread message count replacing red dot (STT 35) */}
-              {chat.unreadCount > 0 && (
-                <span
-                  className="min-w-[19px] h-[19px] px-1.5 rounded-full bg-[#DC2626] text-white text-[10.5px] font-bold font-mono tabular-nums inline-flex items-center justify-center"
-                  title={`${chat.unreadCount} tin nhắn mới chưa đọc`}
-                >
-                  {chat.unreadCount}
-                </span>
-              )}
-            </div>
+            <span
+              className={`text-[11px] font-mono tabular-nums shrink-0 ${
+                hasUnread ? 'font-bold text-slate-700' : 'font-normal text-slate-400'
+              }`}
+            >
+              {chat.lastMessageTime}
+            </span>
           </div>
 
-          {/* Per-session draft displayed right below customer name (STT 35) */}
+          {/* Per-session draft or bold unread message preview */}
           {draft ? (
-            <p className="mt-0.5 text-[12px] truncate text-[#B45309] font-medium">
+            <p
+              className={`mt-0.5 text-[12px] truncate ${
+                hasUnread ? 'font-bold text-[#B45309]' : 'font-medium text-[#B45309]'
+              }`}
+            >
               <span className="font-bold text-[#D97706]">Nháp: </span>
               {draft}
             </p>
           ) : (
             <p
               className={`mt-0.5 text-[12px] truncate ${
-                chat.unreadCount > 0
-                  ? 'text-slate-900 font-medium'
-                  : 'text-slate-500'
+                hasUnread ? 'font-bold text-slate-900' : 'font-normal text-slate-500'
               }`}
             >
               {chat.lastMessagePreview}
             </p>
           )}
 
-          {/* Bottom metadata + Color-coded SLA countdown (STT 38) */}
-          <div className="mt-1.5 flex items-center justify-between gap-1.5 flex-wrap text-[10.5px]">
-            <div className="flex items-center gap-1.5 min-w-0 truncate text-slate-500">
-              {chat.priority === 'urgent' && (
-                <span className="font-bold text-[#DC2626] uppercase shrink-0">
-                  Khẩn cấp
-                </span>
-              )}
-              {chat.priority === 'urgent' && <span className="text-slate-300">·</span>}
-              <span className="truncate">{chat.queueName}</span>
-            </div>
-
-            {chat.lifecycleStatus !== 'completed' && chat.customerWaitSec > 0 && (
+          {/* Color-coded SLA countdown (STT 38) */}
+          {chat.lifecycleStatus !== 'completed' && chat.customerWaitSec > 0 && (
+            <div className="mt-1.5 flex items-center justify-end">
               <span
                 className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border font-mono tabular-nums font-bold text-[10.5px] shrink-0 ${sla.badgeClass}`}
                 title={`${sla.label} (tính từ tin nhắn cuối của khách hàng)`}
@@ -1049,8 +1081,8 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
                 <Clock size={10} />
                 <span>{sla.timerText}</span>
               </span>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </button>
     );
@@ -1083,6 +1115,17 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {/* Simulate 1 new unread customer message */}
+          <button
+            type="button"
+            onClick={handleSimulateUnreadMessage}
+            className="h-7 px-2.5 rounded-md border border-[#DCE3EE] bg-white hover:bg-slate-50 text-slate-700 text-[12px] font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap"
+            title="Giả lập khách hàng gửi 1 tin nhắn mới chưa đọc"
+          >
+            <BellRing size={13} className="text-[#DC2626]" />
+            <span>Giả lập 1 tin mới</span>
+          </button>
+
           {/* 10-Session Load Test Toggle (STT 34) */}
           <button
             type="button"
@@ -1096,17 +1139,6 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
           >
             <Layers size={13} />
             <span>{loadTestEnabled ? 'Đang tải 10 phiên' : 'Giả lập 10 phiên'}</span>
-          </button>
-
-          {/* Manual Interaction Creation (STT 37) */}
-          <button
-            type="button"
-            onClick={() => openModal('manual')}
-            className="h-7 px-2.5 rounded-md bg-[#3B49DF] hover:bg-[#2F3CC7] text-white text-[12px] font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap"
-            title="Tạo tương tác thủ công khi màn hình Call / Email / Chat không tự bật"
-          >
-            <FilePlus2 size={13} />
-            <span>Tạo tương tác thủ công</span>
           </button>
 
           {/* Layout Mode Controls */}
@@ -1160,7 +1192,7 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
               style={{ width: `${leftWidth}px` }}
               className="shrink-0 flex flex-col bg-white h-full overflow-hidden"
             >
-              {/* Search + Priority Filter */}
+              {/* Search */}
               <div className="px-3 pt-3 pb-2 flex items-center gap-1.5 relative shrink-0">
                 <div className="relative flex-1">
                   <Search
@@ -1185,51 +1217,6 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
                     </button>
                   )}
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setFilterPopoverOpen((p) => !p)}
-                  className={`h-8 w-8 rounded-lg border flex items-center justify-center shrink-0 transition-colors ${
-                    priorityFilter !== 'all' || filterPopoverOpen
-                      ? 'border-[#3B49DF] bg-[#F4F5FC] text-[#3B49DF]'
-                      : 'border-[#DCE3EE] bg-white text-slate-500 hover:bg-slate-50'
-                  }`}
-                  title="Lọc mức độ ưu tiên từ Bot"
-                >
-                  <ListFilter size={14} />
-                </button>
-
-                {filterPopoverOpen && (
-                  <div className="absolute right-3 top-11 z-30 w-52 bg-white border border-[#DCE3EE] rounded-lg shadow-lg p-2">
-                    <div className="px-2 pb-1.5 text-[11px] font-semibold text-slate-500">
-                      Ưu tiên định tuyến từ Bot
-                    </div>
-                    {(
-                      [
-                        { id: 'all', label: 'Tất cả mức ưu tiên' },
-                        { id: 'urgent', label: 'Hỗ trợ khẩn cấp' },
-                        { id: 'normal', label: 'Hỗ trợ khác' },
-                      ] as const
-                    ).map((opt) => (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => {
-                          setPriorityFilter(opt.id);
-                          setFilterPopoverOpen(false);
-                        }}
-                        className={`w-full px-2.5 py-1.5 rounded-md text-left text-[12px] flex items-center justify-between ${
-                          priorityFilter === opt.id
-                            ? 'bg-[#F4F5FC] text-[#3B49DF] font-semibold'
-                            : 'text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span>{opt.label}</span>
-                        {priorityFilter === opt.id && <Check size={13} />}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
 
               {/* 4-State Lifecycle Tabs (STT 30): Đang mở | Mới | Đã phân công | Đã tiếp nhận | Hoàn thành */}
@@ -1373,11 +1360,6 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
                                   {cust?.name}
                                 </span>
                               </div>
-                              {s.priority === 'urgent' && (
-                                <span className="text-[10px] font-bold text-[#DC2626] bg-[#FEF2F2] border border-[#FECACA] px-1.5 py-0.5 rounded shrink-0">
-                                  KHẨN CẤP
-                                </span>
-                              )}
                             </div>
                             <p className="mt-1 text-[12px] text-slate-600 line-clamp-1">
                               {s.lastMessagePreview}
@@ -1469,17 +1451,6 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
                                   <span className="text-[12.5px] font-bold text-slate-900 truncate">
                                     {cust?.name}
                                   </span>
-                                  {inv.priority === 'urgent' ? (
-                                    <span className="text-[10px] font-bold text-[#DC2626] shrink-0">
-                                      KHẨN CẤP
-                                    </span>
-                                  ) : (
-                                    <span className="text-[10px] font-semibold text-[#3B49DF] shrink-0">
-                                      {inv.inviteType === 'transfer'
-                                        ? 'CHUYỂN GIAO'
-                                        : 'PHIÊN MỚI'}
-                                    </span>
-                                  )}
                                 </div>
                                 {inv.transferFrom && (
                                   <div className="text-[10.5px] font-semibold text-[#6D28D9]">
@@ -1707,15 +1678,6 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
                       >
                         {LIFECYCLE_LABELS[selectedSession.lifecycleStatus]}
                       </span>
-                      {selectedSession.priority === 'urgent' && (
-                        <>
-                          <span className="text-slate-300">·</span>
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#DC2626] uppercase">
-                            <AlertTriangle size={11.5} />
-                            Hỗ trợ khẩn cấp
-                          </span>
-                        </>
-                      )}
                     </div>
 
                     <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-slate-500 flex-wrap">
