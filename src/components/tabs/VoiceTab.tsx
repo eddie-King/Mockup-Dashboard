@@ -33,7 +33,7 @@ interface VoiceTabProps {
   onRefresh?: () => void;
 }
 
-type RangeKey = '6h' | '3h' | '1h';
+type RangeKey = '6h' | '3h' | '1h' | '30m';
 type DetailSortKey =
   | 'auxReason'
   | 'agentId'
@@ -163,6 +163,9 @@ export const VoiceTab: React.FC<VoiceTabProps> = ({
   }, [isLive]);
 
   const chartData = useMemo(() => {
+    if (range === '30m') {
+      return INITIAL_DIRECT_CALLS_SERIES.slice(-16);
+    }
     if (range === '1h') {
       return INITIAL_DIRECT_CALLS_SERIES.slice(-31);
     }
@@ -173,7 +176,7 @@ export const VoiceTab: React.FC<VoiceTabProps> = ({
   }, [range]);
 
   const xTicks = useMemo(() => {
-    const stepMinutes = range === '1h' ? 5 : 10;
+    const stepMinutes = range === '30m' || range === '1h' ? 5 : 10;
     return chartData
       .filter((pt) => {
         const [, mm] = pt.time.split(':').map(Number);
@@ -280,6 +283,7 @@ export const VoiceTab: React.FC<VoiceTabProps> = ({
               <option value="6h">Last 6 hours</option>
               <option value="3h">Last 3 hours</option>
               <option value="1h">Last 1 hour</option>
+              <option value="30m">Last 30 minutes</option>
             </select>
           </div>
 

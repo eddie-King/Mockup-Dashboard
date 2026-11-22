@@ -84,9 +84,8 @@ export const SIDEBAR_MENU: MenuSection[] = [
             id: 'inbound-chat-sessions',
             label: 'Quản lý phiên chat',
             icon: 'chat',
-            dashboardTab: 'chat',
             description:
-              'Quản trị toàn bộ phiên hội thoại đang diễn ra từ Website, Zalo OA và Mobile App.',
+              'Quản trị toàn bộ phiên hội thoại từ Digiweb / Web VCB, Digibank Chatbot, Zalo OA và Facebook Messenger.',
           },
           {
             id: 'inbound-fanpage',

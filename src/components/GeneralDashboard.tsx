@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Clock,
   Download,
   LayoutGrid,
   RotateCw,
@@ -78,13 +77,8 @@ export const GeneralDashboard: React.FC<GeneralDashboardProps> = ({
           </div>
         </div>
 
-        {/* Right Controls: Clock + Timeframe + Refresh + Export */}
+        {/* Right Controls: Refresh + Export */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="inline-flex items-center gap-1.5 text-[13px] font-mono font-semibold text-slate-600 tabular-nums mr-1">
-            <Clock size={14} className="text-slate-400" />
-            <span>{clockText}</span>
-          </div>
-
           <button
             type="button"
             onClick={onRefresh}

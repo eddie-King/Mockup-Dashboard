@@ -41,6 +41,7 @@ import { OmniDashboard } from './components/OmniDashboard';
 import { GeneralDashboard } from './components/GeneralDashboard';
 import { QualityAssuranceDashboard } from './components/QualityAssuranceDashboard';
 import { WorkforceManagementDashboard } from './components/WorkforceManagementDashboard';
+import { ChatSessionsWorkspace } from './components/ChatSessionsWorkspace';
 import { SecondaryModuleView } from './components/SecondaryModuleView';
 
 function findMenuItemWithPath(
@@ -562,6 +563,11 @@ export default function App() {
           onResetDemoData={handleResetDemo}
         />
 
+        {activeMenuId === 'inbound-chat-sessions' ? (
+          <main className="flex-1 min-h-0 overflow-hidden p-3 flex flex-col">
+            <ChatSessionsWorkspace onNotify={showToast} />
+          </main>
+        ) : (
         <main className="flex-1 overflow-y-auto px-5 py-4 flex flex-col justify-between gap-6">
           <div className="max-w-[1440px] w-full mx-auto">
             {activeMenuId === 'common-general-dashboard' ? (
@@ -663,6 +669,7 @@ export default function App() {
             <span>Version 202611200903</span>
           </footer>
         </main>
+        )}
       </div>
 
       {/* Right Utility Rail */}

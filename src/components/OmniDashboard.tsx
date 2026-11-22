@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Clock,
   Download,
   LineChart,
   Mail,
@@ -218,14 +217,8 @@ export const OmniDashboard: React.FC<OmniDashboardProps> = ({
           </div>
         </div>
 
-        {/* Right Controls: Clock + Timeframe Switcher + Refresh + Export */}
+        {/* Right Controls: Refresh + Export */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Live Clock */}
-          <div className="inline-flex items-center gap-1.5 text-[13px] font-mono font-semibold text-slate-600 tabular-nums mr-1">
-            <Clock size={14} className="text-slate-400" />
-            <span>{clockText}</span>
-          </div>
-
           {/* Refresh Button */}
           <button
             type="button"

@@ -16,10 +16,17 @@ import {
 import { MoreHorizontal } from 'lucide-react';
 import {
   FanpageHourlyPoint,
-  FanpagePostStat,
   INITIAL_FANPAGE_POSTS,
   TimeframeKey,
 } from '../../data/mockDashboardData';
+import {
+  DEFAULT_HALF_HOUR_RANGE,
+  HALF_HOUR_LABELS,
+  HalfHourFilterBar,
+  HalfHourRange,
+  formatSlotRange,
+  getHalfHourWeight,
+} from './HalfHourFilterBar';
 
 interface FanpageCommentTabProps {
   timeframe: TimeframeKey;
@@ -79,11 +86,11 @@ const CardMenuButton: React.FC<CardMenuButtonProps> = ({
 };
 
 export const FanpageCommentTab: React.FC<FanpageCommentTabProps> = ({
-  timeframe,
   onRefresh,
   onExportCsv,
   onNotify,
 }) => {
+  const [hourRange, setHourRange] = useState<HalfHourRange>(DEFAULT_HALF_HOUR_RANGE);
   const [selectedPage, setSelectedPage] = useState<string>('ALL');
   const [selectedPostId, setSelectedPostId] = useState<string>('ALL');
   const [chartType, setChartType] = useState<'bar' | 'area'>('bar');
@@ -105,33 +112,15 @@ export const FanpageCommentTab: React.FC<FanpageCommentTabProps> = ({
     };
   }, []);
 
-  // Scale realistically by global timeframe selector (15m / 1h / today)
-  const scaleFactor = timeframe === '15m' ? 0.14 : timeframe === '1h' ? 0.35 : 1;
-
   const fanpageNames = useMemo(
     () => Array.from(new Set(INITIAL_FANPAGE_POSTS.map((p) => p.fanpageName))),
     []
   );
 
-  const scaledPosts = useMemo<FanpagePostStat[]>(() => {
-    return INITIAL_FANPAGE_POSTS.map((post) => {
-      const replied = Math.max(2, Math.round(post.replied * scaleFactor));
-      const unreplied = Math.max(1, Math.round(post.unreplied * scaleFactor));
-      const spam = Math.max(0, Math.round(post.spam * scaleFactor));
-      const hourly = post.hourly.map((h) => ({
-        hour: h.hour,
-        replied: Math.round(h.replied * scaleFactor),
-        unreplied: Math.round(h.unreplied * scaleFactor),
-        spam: Math.round(h.spam * scaleFactor),
-      }));
-      return { ...post, replied, unreplied, spam, hourly };
-    });
-  }, [scaleFactor]);
-
   const pageFilteredPosts = useMemo(() => {
-    if (selectedPage === 'ALL') return scaledPosts;
-    return scaledPosts.filter((p) => p.fanpageName === selectedPage);
-  }, [scaledPosts, selectedPage]);
+    if (selectedPage === 'ALL') return INITIAL_FANPAGE_POSTS;
+    return INITIAL_FANPAGE_POSTS.filter((p) => p.fanpageName === selectedPage);
+  }, [selectedPage]);
 
   const activePosts = useMemo(() => {
     if (selectedPostId === 'ALL') return pageFilteredPosts;
@@ -144,25 +133,41 @@ export const FanpageCommentTab: React.FC<FanpageCommentTabProps> = ({
     [pageFilteredPosts, selectedPostId]
   );
 
-  // Aggregated KPIs (either All posts total or the chosen single post)
+  // Build 48 half-hour slots (00:00..23:30) from activePosts and slice to [startSlot, endSlot)
+  const hourlySeries = useMemo<FanpageHourlyPoint[]>(() => {
+    const totalBaseReplied = activePosts.reduce((s, p) => s + p.replied, 0);
+    const totalBaseUnreplied = activePosts.reduce((s, p) => s + p.unreplied, 0);
+    const totalBaseSpam = activePosts.reduce((s, p) => s + p.spam, 0);
+
+    let defaultWeightSum = 0;
+    for (let i = DEFAULT_HALF_HOUR_RANGE.startSlot; i < DEFAULT_HALF_HOUR_RANGE.endSlot; i++) {
+      defaultWeightSum += getHalfHourWeight(i);
+    }
+
+    const full48: FanpageHourlyPoint[] = Array.from({ length: 48 }, (_, idx) => {
+      const w = getHalfHourWeight(idx);
+      const share = defaultWeightSum > 0 ? w / defaultWeightSum : 1 / 20;
+      return {
+        hour: HALF_HOUR_LABELS[idx],
+        replied: Math.max(0, Math.round(totalBaseReplied * share)),
+        unreplied: Math.max(0, Math.round(totalBaseUnreplied * share)),
+        spam: Math.max(0, Math.round(totalBaseSpam * share)),
+      };
+    });
+
+    return full48.slice(hourRange.startSlot, hourRange.endSlot);
+  }, [activePosts, hourRange]);
+
+  // Aggregated KPIs directly from the selected 30-min intervals
   const totals = useMemo(() => {
-    const replied = activePosts.reduce((s, p) => s + p.replied, 0);
-    const unreplied = activePosts.reduce((s, p) => s + p.unreplied, 0);
-    const spam = activePosts.reduce((s, p) => s + p.spam, 0);
+    const replied = hourlySeries.reduce((s, pt) => s + pt.replied, 0);
+    const unreplied = hourlySeries.reduce((s, pt) => s + pt.unreplied, 0);
+    const spam = hourlySeries.reduce((s, pt) => s + pt.spam, 0);
     const total = replied + unreplied + spam;
     return { total, replied, unreplied, spam };
-  }, [activePosts]);
+  }, [hourlySeries]);
 
-  // Aggregated Hourly Series
-  const hourlySeries = useMemo<FanpageHourlyPoint[]>(() => {
-    const baseHours = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00'];
-    return baseHours.map((hour, idx) => ({
-      hour,
-      replied: activePosts.reduce((s, p) => s + (p.hourly[idx]?.replied ?? 0), 0),
-      unreplied: activePosts.reduce((s, p) => s + (p.hourly[idx]?.unreplied ?? 0), 0),
-      spam: activePosts.reduce((s, p) => s + (p.hourly[idx]?.spam ?? 0), 0),
-    }));
-  }, [activePosts]);
+  const rangeLabel = formatSlotRange(hourRange);
 
   const donutSlices = useMemo(
     () => [
@@ -208,6 +213,12 @@ export const FanpageCommentTab: React.FC<FanpageCommentTabProps> = ({
 
   return (
     <div ref={containerRef} className="space-y-4">
+      <HalfHourFilterBar
+        value={hourRange}
+        onChange={setHourRange}
+        channelName="Fanpage Comment"
+      />
+
       {/* Scope Filter Bar: Tổng toàn kênh hoặc theo từng bài viết */}
       <section className="rounded-xl border border-[#E5E9F2] bg-white px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
@@ -321,10 +332,11 @@ export const FanpageCommentTab: React.FC<FanpageCommentTabProps> = ({
             <div className="flex items-center gap-4 flex-wrap">
               <div>
                 <h2 className="text-[14.5px] font-bold text-[#1E293B]">
-                  Comment trong ngày
+                  Comment theo khung giờ (30 phút)
                 </h2>
                 <div className="text-[11.5px] text-slate-500 mt-0.5">
-                  Phạm vi: {scopeLabel}
+                  Phạm vi: {scopeLabel} ·{' '}
+                  <span className="font-mono tabular-nums">{rangeLabel}</span>
                 </div>
               </div>
               <div className="flex items-center gap-3.5 text-[12px] text-slate-600">
@@ -380,7 +392,9 @@ export const FanpageCommentTab: React.FC<FanpageCommentTabProps> = ({
                   <CartesianGrid strokeDasharray="3 3" stroke="#EEF2F6" vertical={false} />
                   <XAxis
                     dataKey="hour"
-                    tick={{ fontSize: 12, fill: '#64748B' }}
+                    interval="preserveStartEnd"
+                    minTickGap={18}
+                    tick={{ fontSize: 11.5, fill: '#64748B' }}
                     axisLine={{ stroke: '#E2E8F0' }}
                     tickLine={false}
                   />
@@ -445,7 +459,9 @@ export const FanpageCommentTab: React.FC<FanpageCommentTabProps> = ({
                   <CartesianGrid strokeDasharray="3 3" stroke="#EEF2F6" vertical={false} />
                   <XAxis
                     dataKey="hour"
-                    tick={{ fontSize: 12, fill: '#64748B' }}
+                    interval="preserveStartEnd"
+                    minTickGap={18}
+                    tick={{ fontSize: 11.5, fill: '#64748B' }}
                     axisLine={{ stroke: '#E2E8F0' }}
                     tickLine={false}
                   />

@@ -16,9 +16,16 @@ import {
 import { MoreHorizontal } from 'lucide-react';
 import {
   EMAIL_CENTER_STATUS,
-  EMAIL_DAILY_HOURLY,
   EmailStatusSlice,
 } from '../../data/mockDashboardData';
+import {
+  DEFAULT_HALF_HOUR_RANGE,
+  HALF_HOUR_LABELS,
+  HalfHourFilterBar,
+  HalfHourRange,
+  formatSlotRange,
+  getHalfHourWeight,
+} from './HalfHourFilterBar';
 
 interface EmailTabProps {
   stats: {
@@ -212,6 +219,7 @@ export const EmailTab: React.FC<EmailTabProps> = ({
   onExportCsv,
   onNotify,
 }) => {
+  const [hourRange, setHourRange] = useState<HalfHourRange>(DEFAULT_HALF_HOUR_RANGE);
   const [dailyChartType, setDailyChartType] = useState<'bar' | 'area'>('bar');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -231,35 +239,81 @@ export const EmailTab: React.FC<EmailTabProps> = ({
     };
   }, []);
 
+  // Build 48 half-hour email buckets (00:00..23:30) and filter to selected [startSlot, endSlot)
+  const filteredSeries = useMemo(() => {
+    const full48 = Array.from({ length: 48 }, (_, idx) => {
+      const w = getHalfHourWeight(idx);
+      const accepted = Math.max(1, Math.round(14 * w + ((idx * 3) % 4)));
+      const unassigned = Math.max(0, Math.round(2.6 * w + (idx % 3 === 0 ? 1 : 0)));
+      const spam = Math.max(0, Math.round(1.1 * w + (idx % 5 === 0 ? 1 : 0)));
+      return {
+        hour: HALF_HOUR_LABELS[idx],
+        accepted,
+        unassigned,
+        spam,
+      };
+    });
+    return full48.slice(hourRange.startSlot, hourRange.endSlot);
+  }, [hourRange]);
+
+  const filteredKpis = useMemo(() => {
+    const accepted = filteredSeries.reduce((s, r) => s + r.accepted, 0);
+    const unassigned = filteredSeries.reduce((s, r) => s + r.unassigned, 0);
+    const spam = filteredSeries.reduce((s, r) => s + r.spam, 0);
+    const received = accepted + unassigned + spam;
+    return { received, accepted, unassigned, spam };
+  }, [filteredSeries]);
+
+  const filteredDonutData = useMemo<EmailStatusSlice[]>(() => {
+    const baseTotal = EMAIL_CENTER_STATUS.reduce((s, x) => s + x.value, 0) || 1;
+    const scale =
+      stats.received > 0 ? filteredKpis.received / Math.max(1, stats.received) : 1;
+    return EMAIL_CENTER_STATUS.map((slice) => ({
+      ...slice,
+      value: Math.max(
+        slice.value > 0 ? 1 : 0,
+        Math.round((slice.value / baseTotal) * filteredKpis.received * Math.min(1.4, Math.max(0.6, scale + 0.3)))
+      ),
+    }));
+  }, [filteredKpis.received, stats.received]);
+
+  const rangeLabel = formatSlotRange(hourRange);
+
   const kpiCards = [
     {
       id: 'kpi-total',
       title: 'Tổng Email',
-      value: stats.received,
+      value: filteredKpis.received,
       valueColor: 'text-[#1E293B]',
     },
     {
       id: 'kpi-accepted',
       title: 'Email đã tiếp nhận',
-      value: stats.accepted,
+      value: filteredKpis.accepted,
       valueColor: 'text-[#1E293B]',
     },
     {
       id: 'kpi-unassigned',
       title: 'Email chưa tiếp nhận',
-      value: stats.unassigned,
-      valueColor: stats.unassigned >= 10 ? 'text-[#EA580C]' : 'text-[#1E293B]',
+      value: filteredKpis.unassigned,
+      valueColor: filteredKpis.unassigned >= 10 ? 'text-[#EA580C]' : 'text-[#1E293B]',
     },
     {
       id: 'kpi-spam',
       title: 'Email Spam',
-      value: stats.spam,
+      value: filteredKpis.spam,
       valueColor: 'text-[#1E293B]',
     },
   ];
 
   return (
     <div ref={containerRef} className="space-y-4">
+      <HalfHourFilterBar
+        value={hourRange}
+        onChange={setHourRange}
+        channelName="Email"
+      />
+
       {/* Row 1: 4 Equal KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         {kpiCards.map((card) => (
@@ -296,9 +350,14 @@ export const EmailTab: React.FC<EmailTabProps> = ({
         <section className="lg:col-span-7 rounded-xl border border-[#E5E9F2] bg-white p-5 flex flex-col justify-between">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-4 flex-wrap">
-              <h2 className="text-[14.5px] font-bold text-[#1E293B]">
-                Email trong ngày
-              </h2>
+              <div>
+                <h2 className="text-[14.5px] font-bold text-[#1E293B]">
+                  Email theo khung giờ (30 phút)
+                </h2>
+                <div className="text-[11.5px] font-mono text-slate-500 tabular-nums mt-0.5">
+                  {rangeLabel}
+                </div>
+              </div>
               <div className="flex items-center gap-3.5 text-[12px] text-slate-600">
                 <span className="inline-flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-sm bg-[#2563EB]" />
@@ -345,14 +404,16 @@ export const EmailTab: React.FC<EmailTabProps> = ({
             <ResponsiveContainer width="100%" height={265}>
               {dailyChartType === 'bar' ? (
                 <BarChart
-                  data={EMAIL_DAILY_HOURLY}
+                  data={filteredSeries}
                   margin={{ top: 8, right: 10, left: -20, bottom: 0 }}
-                  barGap={3}
+                  barGap={2}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#EEF2F6" vertical={false} />
                   <XAxis
                     dataKey="hour"
-                    tick={{ fontSize: 12, fill: '#64748B' }}
+                    interval="preserveStartEnd"
+                    minTickGap={18}
+                    tick={{ fontSize: 11.5, fill: '#64748B' }}
                     axisLine={{ stroke: '#E2E8F0' }}
                     tickLine={false}
                   />
@@ -401,7 +462,7 @@ export const EmailTab: React.FC<EmailTabProps> = ({
                 </BarChart>
               ) : (
                 <AreaChart
-                  data={EMAIL_DAILY_HOURLY}
+                  data={filteredSeries}
                   margin={{ top: 8, right: 10, left: -20, bottom: 0 }}
                 >
                   <defs>
@@ -417,7 +478,9 @@ export const EmailTab: React.FC<EmailTabProps> = ({
                   <CartesianGrid strokeDasharray="3 3" stroke="#EEF2F6" vertical={false} />
                   <XAxis
                     dataKey="hour"
-                    tick={{ fontSize: 12, fill: '#64748B' }}
+                    interval="preserveStartEnd"
+                    minTickGap={18}
+                    tick={{ fontSize: 11.5, fill: '#64748B' }}
                     axisLine={{ stroke: '#E2E8F0' }}
                     tickLine={false}
                   />
@@ -467,7 +530,7 @@ export const EmailTab: React.FC<EmailTabProps> = ({
           <DonutWidget
             title="Trung tâm: Email theo trạng thái"
             cardId="donut-center"
-            data={EMAIL_CENTER_STATUS}
+            data={filteredDonutData}
             openMenuId={openMenuId}
             setOpenMenuId={setOpenMenuId}
             onRefresh={onRefresh}

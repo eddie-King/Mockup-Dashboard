@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Area,
   CartesianGrid,
@@ -16,6 +16,14 @@ import {
   formatDuration,
   formatHms,
 } from '../../data/mockDashboardData';
+import {
+  DEFAULT_HALF_HOUR_RANGE,
+  HALF_HOUR_LABELS,
+  HalfHourFilterBar,
+  HalfHourRange,
+  formatSlotRange,
+  getHalfHourWeight,
+} from './HalfHourFilterBar';
 
 interface ChatTabProps {
   timeframe: TimeframeKey;
@@ -38,15 +46,79 @@ interface ChatTabProps {
 }
 
 export const ChatTab: React.FC<ChatTabProps> = ({
-  timeframe,
   isLive,
   stats,
   chatQueues,
   demandTrend,
-  onAdjustChatSlot,
 }) => {
-  const timeframeLabel =
-    timeframe === '15m' ? '15 phút' : timeframe === '1h' ? '1 giờ' : 'Hôm nay';
+  const [hourRange, setHourRange] = useState<HalfHourRange>(DEFAULT_HALF_HOUR_RANGE);
+
+  const rangeLabel = formatSlotRange(hourRange);
+
+  // Build full 48 half-hour slots (00:00..23:30) and filter to selected [startSlot, endSlot)
+  const filteredTrend = useMemo<ChatDemandPoint[]>(() => {
+    const existingByTime = new Map(demandTrend.map((d) => [d.time, d]));
+    const full48: ChatDemandPoint[] = Array.from({ length: 48 }, (_, idx) => {
+      const label = HALF_HOUR_LABELS[idx];
+      const existing = existingByTime.get(label);
+      if (existing) return existing;
+      const w = getHalfHourWeight(idx);
+      const demand = Math.max(4, Math.round(38 * w + ((idx * 5) % 6)));
+      const capacity = idx >= 16 && idx < 36 ? 48 : idx >= 12 && idx < 42 ? 32 : 18;
+      return { time: label, demand, capacity };
+    });
+    const sliced = full48.slice(hourRange.startSlot, hourRange.endSlot);
+    if (sliced.length === 1) {
+      const slot = sliced[0];
+      const baseHour = Math.floor(hourRange.startSlot / 2);
+      const baseMin = (hourRange.startSlot % 2) * 30;
+      const offsets = [0, 10, 20, 30];
+      const deltas = [-2, 1, 2, -1];
+      return offsets.map((offset, i) => {
+        const totalMin = baseHour * 60 + baseMin + offset;
+        const h = Math.floor(totalMin / 60);
+        const m = totalMin % 60;
+        const label =
+          totalMin === 1440
+            ? '24:00'
+            : `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        return {
+          time: label,
+          demand: Math.max(2, slot.demand + deltas[i]),
+          capacity: slot.capacity,
+        };
+      });
+    }
+    return sliced;
+  }, [demandTrend, hourRange]);
+
+  // Scale Section 1 cumulative stats proportionally to the selected 30-min window
+  const filteredStats = useMemo(() => {
+    const defaultSlots =
+      DEFAULT_HALF_HOUR_RANGE.endSlot - DEFAULT_HALF_HOUR_RANGE.startSlot;
+    let defaultWeight = 0;
+    for (let i = DEFAULT_HALF_HOUR_RANGE.startSlot; i < DEFAULT_HALF_HOUR_RANGE.endSlot; i++) {
+      defaultWeight += getHalfHourWeight(i);
+    }
+    let activeWeight = 0;
+    for (let i = hourRange.startSlot; i < hourRange.endSlot; i++) {
+      activeWeight += getHalfHourWeight(i);
+    }
+    const ratio = defaultWeight > 0 ? activeWeight / defaultWeight : 1;
+    const totalIncoming = Math.max(1, Math.round(stats.totalIncoming * ratio));
+    const acceptedRatio =
+      stats.totalIncoming > 0 ? stats.accepted / stats.totalIncoming : 0.94;
+    const accepted = Math.min(totalIncoming, Math.round(totalIncoming * acceptedRatio));
+    const loadShift =
+      (hourRange.endSlot - hourRange.startSlot) < defaultSlots ? -3 : 2;
+    const awtSec = Math.max(8, Math.round(stats.awtSec + loadShift));
+    const frtSec = Math.max(6, Math.round(stats.frtSec + Math.round(loadShift * 0.5)));
+    const slaPercent = Math.min(
+      99.8,
+      Math.max(82.0, stats.slaPercent - loadShift * 0.25)
+    );
+    return { totalIncoming, accepted, awtSec, frtSec, slaPercent };
+  }, [stats, hourRange]);
 
   // Aggregate ALL QUEUES capacity metrics dynamically
   const totals = useMemo(() => {
@@ -63,37 +135,45 @@ export const ChatTab: React.FC<ChatTabProps> = ({
     return { inQueue, activeChats, availableSlots, occupancy, longestWaitSec };
   }, [chatQueues]);
 
-  // Compute dynamic capacity shortfall estimate based on current queue slots
+  // Compute dynamic capacity shortfall estimate based on filtered 30-min trend
   const peakInfo = useMemo(() => {
-    let peakPoint = demandTrend[0];
-    for (const pt of demandTrend) {
-      if (pt.demand > peakPoint.demand) peakPoint = pt;
+    const source = filteredTrend.length > 0 ? filteredTrend : demandTrend;
+    let peakIdx = 0;
+    for (let i = 1; i < source.length; i++) {
+      if (source[i].demand > source[peakIdx].demand) peakIdx = i;
     }
-    const peakStart = peakPoint.time;
-    const idx = demandTrend.findIndex((p) => p.time === peakStart);
-    const peakEnd =
-      idx >= 0 && idx + 1 < demandTrend.length
-        ? demandTrend[idx + 1].time
-        : '13:30';
+    const peakPoint = source[peakIdx];
+    const startLabel = peakPoint?.time ?? '08:00';
+    const startSlotIdx = HALF_HOUR_LABELS.indexOf(startLabel);
+    const endLabel =
+      startSlotIdx >= 0 && startSlotIdx + 1 < HALF_HOUR_LABELS.length
+        ? HALF_HOUR_LABELS[startSlotIdx + 1]
+        : '08:30';
     const currentTotalCap = totals.activeChats + totals.availableSlots;
-    const shortfall = Math.max(0, peakPoint.demand - currentTotalCap);
+    const shortfall = Math.max(0, (peakPoint?.demand ?? 0) - currentTotalCap);
     return {
-      windowText: `${peakStart} - ${peakEnd}`,
+      windowText: `${startLabel} - ${endLabel}`,
       shortfall,
     };
-  }, [demandTrend, totals.activeChats, totals.availableSlots]);
+  }, [filteredTrend, demandTrend, totals.activeChats, totals.availableSlots]);
 
   return (
     <div className="space-y-4">
+      <HalfHourFilterBar
+        value={hourRange}
+        onChange={setHourRange}
+        channelName="Chat"
+      />
+
       {/* 1. Tổng quan Chat */}
       <section className="rounded-xl border border-[#E5E9F2] bg-white overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2.5">
+        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2.5 flex-wrap">
           <h2 className="text-[14.5px] font-bold text-[#0F172A]">
             1. Tổng quan Chat
           </h2>
-          <span className="text-[12.5px] text-slate-500">lũy kế</span>
-          <span className="px-2.5 py-0.5 rounded-full bg-[#E9EEF5] text-slate-700 text-[11.5px] font-semibold">
-            {timeframeLabel}
+          <span className="text-[12.5px] text-slate-500">khung giờ</span>
+          <span className="text-[12.5px] font-mono font-semibold text-slate-700 tabular-nums">
+            {rangeLabel}
           </span>
         </div>
 
@@ -104,7 +184,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
               TỔNG CHAT VÀO
             </div>
             <div className="mt-2 text-[28px] leading-none font-extrabold text-[#1E293B] tabular-nums">
-              {stats.totalIncoming.toLocaleString('vi-VN')}
+              {filteredStats.totalIncoming.toLocaleString('vi-VN')}
             </div>
             <div className="mt-2 text-[11.5px] text-slate-400">
               Tổng lượng chat phát sinh
@@ -117,7 +197,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
               ĐÃ NHẬN
             </div>
             <div className="mt-2 text-[28px] leading-none font-extrabold text-[#16A34A] tabular-nums">
-              {stats.accepted.toLocaleString('vi-VN')}
+              {filteredStats.accepted.toLocaleString('vi-VN')}
             </div>
             <div className="mt-2 text-[11.5px] text-slate-400">
               Chat được agent nhận
@@ -130,7 +210,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
               AWT
             </div>
             <div className="mt-2 text-[28px] leading-none font-extrabold font-mono text-[#EA580C] tabular-nums">
-              {formatDuration(stats.awtSec)}
+              {formatDuration(filteredStats.awtSec)}
             </div>
             <div className="mt-2 text-[11.5px] text-slate-400">
               Thời gian chờ trung bình
@@ -143,7 +223,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
               PHẢN HỒI ĐẦU
             </div>
             <div className="mt-2 text-[28px] leading-none font-extrabold font-mono text-[#16A34A] tabular-nums">
-              {formatDuration(stats.frtSec)}
+              {formatDuration(filteredStats.frtSec)}
             </div>
             <div className="mt-2 text-[11.5px] text-slate-400">
               Thời gian phản hồi đầu tiên
@@ -156,7 +236,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
               SLA %
             </div>
             <div className="mt-2 text-[28px] leading-none font-extrabold text-[#1E293B] tabular-nums">
-              {stats.slaPercent.toFixed(1)}%
+              {filteredStats.slaPercent.toFixed(1)}%
             </div>
             <div className="mt-2 text-[11.5px] text-slate-400">
               Tỷ lệ đáp ứng cam kết
@@ -288,11 +368,13 @@ export const ChatTab: React.FC<ChatTabProps> = ({
 
       {/* 3. Xu hướng nhu cầu & năng lực phục vụ */}
       <section className="rounded-xl border border-[#E5E9F2] bg-white overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2.5">
+        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2.5 flex-wrap">
           <h2 className="text-[14.5px] font-bold text-[#0F172A]">
             3. Xu hướng nhu cầu & năng lực phục vụ
           </h2>
-          <span className="text-[12.5px] text-slate-500">lũy kế Hôm nay</span>
+          <span className="text-[12.5px] font-mono text-slate-500 tabular-nums">
+            {rangeLabel} (bước 30p)
+          </span>
         </div>
 
         <div className="p-5 grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
@@ -312,7 +394,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
             <div className="flex-1 min-h-[250px] w-full">
               <ResponsiveContainer width="100%" height={260}>
                 <ComposedChart
-                  data={demandTrend}
+                  data={filteredTrend}
                   margin={{ top: 10, right: 10, left: -24, bottom: 0 }}
                 >
                   <defs>
@@ -324,7 +406,8 @@ export const ChatTab: React.FC<ChatTabProps> = ({
                   <CartesianGrid stroke="#E5E9F2" vertical={false} />
                   <XAxis
                     dataKey="time"
-                    interval={1}
+                    interval="preserveStartEnd"
+                    minTickGap={18}
                     tick={{ fontSize: 11, fill: '#94A3B8' }}
                     axisLine={{ stroke: '#E2E8F0' }}
                     tickLine={false}
