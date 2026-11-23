@@ -1,13 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
-  ArrowUpCircle,
   BellRing,
-  Check,
   CheckCircle2,
   Clock,
-  Copy,
-  Edit3,
   Image as ImageIcon,
   Layers,
   MessageSquare,
@@ -34,7 +30,6 @@ import {
   INITIAL_CHAT_SESSIONS,
   INITIAL_MANUAL_INTERACTIONS,
   INITIAL_TICKETS_BY_CUSTOMER,
-  LIFECYCLE_LABELS,
   LinkedCustomerProfile,
   ManualInteractionItem,
   MAX_CONCURRENT_SESSIONS,
@@ -203,7 +198,6 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
   const [pendingAttachment, setPendingAttachment] = useState<string | null>(null);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
-  const [copiedCode, setCopiedCode] = useState(false);
 
   // Modals
   const [modalMode, setModalMode] = useState<ModalMode>(null);
@@ -667,14 +661,6 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
     setPendingAttachment(null);
     setTemplatePickerOpen(false);
     setEmojiPickerOpen(false);
-  };
-
-  const handleCopyCode = () => {
-    if (!selectedSession) return;
-    navigator.clipboard?.writeText(selectedSession.interactionCode).catch(() => {});
-    setCopiedCode(true);
-    window.setTimeout(() => setCopiedCode(false), 1500);
-    onNotify?.(`Đã sao chép mã tương tác ${selectedSession.interactionCode}.`);
   };
 
   // CRM handlers (STT 37 & STT 41)
@@ -1659,51 +1645,13 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
                   </div>
 
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h2 className="text-[14.5px] font-bold text-slate-900 truncate">
-                        {activeCustomer.name}
-                      </h2>
-                      <span className="text-[11.5px] font-medium text-slate-500">
-                        {selectedSession.channelLabel}
-                      </span>
-                      <span className="text-slate-300">·</span>
-                      <span
-                        className={`text-[11px] font-bold uppercase ${
-                          selectedSession.lifecycleStatus === 'accepted'
-                            ? 'text-[#16A34A]'
-                            : selectedSession.lifecycleStatus === 'completed'
-                            ? 'text-slate-500'
-                            : 'text-[#3B49DF]'
-                        }`}
-                      >
-                        {LIFECYCLE_LABELS[selectedSession.lifecycleStatus]}
-                      </span>
-                    </div>
-
-                    <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-slate-500 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={handleCopyCode}
-                        className="inline-flex items-center gap-1 font-mono tabular-nums font-medium text-slate-700 hover:text-[#3B49DF]"
-                        title="Sao chép mã tương tác"
-                      >
-                        <span>{selectedSession.interactionCode}</span>
-                        {copiedCode ? (
-                          <Check size={11.5} className="text-emerald-600" />
-                        ) : (
-                          <Copy size={11.5} className="text-slate-400" />
-                        )}
-                      </button>
-                      <span className="text-slate-300">·</span>
-                      <span className="font-mono text-slate-600">
-                        SenderID: {selectedSession.senderId}
-                      </span>
-                      <span className="text-slate-300">·</span>
-                      <span>
-                        Bắt đầu{' '}
-                        <span className="font-mono tabular-nums">
-                          {selectedSession.startedAt}
-                        </span>
+                    <h2 className="text-[14.5px] font-bold text-slate-900 truncate leading-snug">
+                      {activeCustomer.name}
+                    </h2>
+                    <div className="mt-0.5 text-[11.5px] text-slate-500 whitespace-nowrap">
+                      Bắt đầu{' '}
+                      <span className="font-mono tabular-nums text-slate-600">
+                        {selectedSession.startedAt}
                       </span>
                     </div>
                   </div>
@@ -1712,7 +1660,7 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
                 {/* Live Color-Coded SLA Countdown + Duration (STT 38) */}
                 <div className="flex items-center gap-4 shrink-0">
                   <div className="text-right">
-                    <div className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+                    <div className="text-[10px] font-bold tracking-wider text-slate-400 uppercase whitespace-nowrap">
                       SLA PHẢN HỒI · {activeSla.label}
                     </div>
                     <div
@@ -1721,8 +1669,8 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
                       {activeSla.timerText}
                     </div>
                   </div>
-                  <div className="hidden xl:block text-right">
-                    <div className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+                  <div className="text-right">
+                    <div className="text-[10px] font-bold tracking-wider text-slate-400 uppercase whitespace-nowrap">
                       THỜI LƯỢNG
                     </div>
                     <div className="text-[16px] font-bold font-mono tabular-nums text-slate-800 leading-tight">
@@ -1732,21 +1680,13 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
                 </div>
               </div>
 
-              {/* Action Toolbar */}
-              <div className="px-4 py-2 border-b border-[#E5E9F2] bg-white flex items-center justify-between gap-2 flex-wrap shrink-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => openModal('update')}
-                    className="h-7 px-2.5 rounded-md border border-[#DCE3EE] bg-white hover:bg-[#F8FAFC] text-[12px] font-medium text-slate-700 inline-flex items-center gap-1.5 whitespace-nowrap"
-                  >
-                    <Edit3 size={13} className="text-slate-500" />
-                    <span>Cập nhật</span>
-                  </button>
+              {/* Action Toolbar (3 core actions on a single line) */}
+              <div className="px-4 py-2 border-b border-[#E5E9F2] bg-white flex items-center justify-between gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => openModal('ticket')}
-                    className="h-7 px-2.5 rounded-md border border-[#DCE3EE] bg-white hover:bg-[#F8FAFC] text-[12px] font-medium text-slate-700 inline-flex items-center gap-1.5 whitespace-nowrap"
+                    className="h-7 px-2.5 rounded-md border border-[#DCE3EE] bg-white hover:bg-[#F8FAFC] text-[12px] font-medium text-slate-700 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
                   >
                     <Ticket size={13} className="text-slate-500" />
                     <span>Tạo ticket</span>
@@ -1755,19 +1695,10 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
                     type="button"
                     onClick={() => openModal('transfer')}
                     disabled={selectedSession.lifecycleStatus !== 'accepted'}
-                    className="h-7 px-2.5 rounded-md border border-[#DCE3EE] bg-white hover:bg-[#F8FAFC] disabled:opacity-45 disabled:cursor-not-allowed text-[12px] font-medium text-slate-700 inline-flex items-center gap-1.5 whitespace-nowrap"
+                    className="h-7 px-2.5 rounded-md border border-[#DCE3EE] bg-white hover:bg-[#F8FAFC] disabled:opacity-45 disabled:cursor-not-allowed text-[12px] font-medium text-slate-700 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
                   >
                     <ArrowLeftRight size={13} className="text-slate-500" />
                     <span>Chuyển</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openModal('assist')}
-                    disabled={selectedSession.lifecycleStatus !== 'accepted'}
-                    className="h-7 px-2.5 rounded-md border border-[#DCE3EE] bg-white hover:bg-[#F8FAFC] disabled:opacity-45 disabled:cursor-not-allowed text-[12px] font-medium text-slate-700 inline-flex items-center gap-1.5 whitespace-nowrap"
-                  >
-                    <ArrowUpCircle size={13} className="text-slate-500" />
-                    <span>Xin hỗ trợ</span>
                   </button>
                 </div>
 
