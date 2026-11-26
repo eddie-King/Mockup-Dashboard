@@ -24,7 +24,13 @@ interface QualityAssuranceDashboardProps {
   onNotify?: (msg: string) => void;
 }
 
-type PeriodOption = 'Ngày' | 'Tuần' | 'Tháng' | 'Quý';
+type PeriodOption =
+  | 'Hôm nay'
+  | 'Hôm qua'
+  | '7 ngày gần nhất'
+  | 'Tháng này'
+  | 'Tháng trước'
+  | 'Quý này';
 type SourceOption = 'Tất cả' | 'Inbound' | 'Outbound';
 type ChannelOption = 'Tất cả' | 'Voice' | 'Chat' | 'Email' | 'Fanpage';
 
@@ -35,16 +41,6 @@ const UNITS = [
   'Hỗ trợ VIP',
   'Khối Thẻ & E-Banking',
   'Chi nhánh Đà Nẵng',
-] as const;
-
-const AGENTS = [
-  'Tất cả',
-  'Nguyễn Thị Vân Anh',
-  'Phạm Trà My',
-  'Lê Thị Ngọc Linh',
-  'Trần Khắc Việt',
-  'Nguyễn Thị Thảo Ly',
-  'Hà Thị Phương',
 ] as const;
 
 interface PieLabelProps {
@@ -99,29 +95,34 @@ const renderPiePercentLabel = ({
 export const QualityAssuranceDashboard: React.FC<
   QualityAssuranceDashboardProps
 > = ({ isRefreshing = false, onRefresh, onNotify }) => {
-  const [period, setPeriod] = useState<PeriodOption>('Ngày');
+  const [period, setPeriod] = useState<PeriodOption>('Hôm nay');
   const [source, setSource] = useState<SourceOption>('Tất cả');
   const [channel, setChannel] = useState<ChannelOption>('Tất cả');
   const [unit, setUnit] = useState<string>('Tất cả');
-  const [agent, setAgent] = useState<string>('Tất cả');
 
   // Dynamic deterministic scale factor based on selected filters
   const filterFactor = useMemo(() => {
     let factor = 1;
-    if (period === 'Tuần') factor *= 1.4;
-    if (period === 'Tháng') factor *= 2.1;
-    if (period === 'Quý') factor *= 3.0;
+    if (period === 'Hôm qua') factor *= 0.92;
+    if (period === '7 ngày gần nhất') factor *= 1.4;
+    if (period === 'Tháng này') factor *= 2.1;
+    if (period === 'Tháng trước') factor *= 2.3;
+    if (period === 'Quý này') factor *= 3.0;
     if (source === 'Inbound') factor *= 0.72;
     if (source === 'Outbound') factor *= 0.48;
     if (channel !== 'Tất cả') factor *= 0.55;
     if (unit !== 'Tất cả') factor *= 0.45;
-    if (agent !== 'Tất cả') factor *= 0.25;
     return factor;
-  }, [period, source, channel, unit, agent]);
+  }, [period, source, channel, unit]);
 
   // Subtle pass-rate shift when switching filters (default matches exact 59% / 41% in image)
   const passShift = useMemo(() => {
     let shift = 0;
+    if (period === 'Hôm qua') shift -= 2;
+    if (period === '7 ngày gần nhất') shift += 2;
+    if (period === 'Tháng này') shift += 3;
+    if (period === 'Tháng trước') shift += 1;
+    if (period === 'Quý này') shift += 4;
     if (source === 'Inbound') shift += 3;
     if (source === 'Outbound') shift -= 2;
     if (channel === 'Voice') shift += 2;
@@ -129,26 +130,8 @@ export const QualityAssuranceDashboard: React.FC<
     if (channel === 'Email') shift += 1;
     if (channel === 'Fanpage') shift -= 3;
     if (unit === 'Hỗ trợ VIP') shift += 6;
-    if (agent !== 'Tất cả') shift += 4;
     return shift;
-  }, [source, channel, unit, agent]);
-
-  const autoPieData = useMemo(() => {
-    const passPct = Math.max(30, Math.min(88, 59 + passShift));
-    const failPct = 100 - passPct;
-    return [
-      {
-        name: 'Số tương tác không đạt chuẩn (Bot chấm)',
-        value: failPct,
-        color: '#3B6ED5',
-      },
-      {
-        name: 'Số tương tác đạt chuẩn (Bot chấm)',
-        value: passPct,
-        color: '#ED7D31',
-      },
-    ];
-  }, [passShift]);
+  }, [period, source, channel, unit]);
 
   const manualPieData = useMemo(() => {
     const passPct = Math.max(
@@ -158,12 +141,12 @@ export const QualityAssuranceDashboard: React.FC<
     const failPct = 100 - passPct;
     return [
       {
-        name: 'Số tương tác không đạt chuẩn (Người chấm)',
+        name: 'Số tương tác không đạt chuẩn',
         value: failPct,
         color: '#3B6ED5',
       },
       {
-        name: 'Số tương tác đạt chuẩn (Người chấm)',
+        name: 'Số tương tác đạt chuẩn',
         value: passPct,
         color: '#ED7D31',
       },
@@ -174,42 +157,32 @@ export const QualityAssuranceDashboard: React.FC<
     () => [
       {
         highName: 'CN Hà Nội',
-        highBot: (94.2 + passShift * 0.1).toFixed(1),
         highManual: (95.4 + passShift * 0.1).toFixed(1),
         lowName: 'CN Bắc Ninh',
-        lowBot: (68.5 + passShift * 0.1).toFixed(1),
         lowManual: (70.2 + passShift * 0.1).toFixed(1),
       },
       {
         highName: 'CN TP.HCM',
-        highBot: (92.8 + passShift * 0.1).toFixed(1),
         highManual: (93.6 + passShift * 0.1).toFixed(1),
         lowName: 'CN Nghệ An',
-        lowBot: (66.4 + passShift * 0.1).toFixed(1),
         lowManual: (68.0 + passShift * 0.1).toFixed(1),
       },
       {
         highName: 'CN Đà Nẵng',
-        highBot: (91.5 + passShift * 0.1).toFixed(1),
         highManual: (92.1 + passShift * 0.1).toFixed(1),
         lowName: 'CN Thừa Thiên Huế',
-        lowBot: (64.8 + passShift * 0.1).toFixed(1),
         lowManual: (66.5 + passShift * 0.1).toFixed(1),
       },
       {
         highName: 'CN Hải Phòng',
-        highBot: (89.9 + passShift * 0.1).toFixed(1),
         highManual: (90.8 + passShift * 0.1).toFixed(1),
         lowName: 'CN Bình Dương',
-        lowBot: (62.1 + passShift * 0.1).toFixed(1),
         lowManual: (64.3 + passShift * 0.1).toFixed(1),
       },
       {
         highName: 'CN Cần Thơ',
-        highBot: (88.7 + passShift * 0.1).toFixed(1),
         highManual: (89.5 + passShift * 0.1).toFixed(1),
         lowName: 'CN Đồng Nai',
-        lowBot: (59.6 + passShift * 0.1).toFixed(1),
         lowManual: (61.8 + passShift * 0.1).toFixed(1),
       },
     ],
@@ -220,42 +193,32 @@ export const QualityAssuranceDashboard: React.FC<
     () => [
       {
         highName: 'Nguyễn Thị Vân Anh',
-        highBot: (96.5 + passShift * 0.08).toFixed(1),
         highManual: (97.2 + passShift * 0.08).toFixed(1),
         lowName: 'Trần Khắc Việt',
-        lowBot: (64.2 + passShift * 0.08).toFixed(1),
         lowManual: (66.0 + passShift * 0.08).toFixed(1),
       },
       {
         highName: 'Phạm Trà My',
-        highBot: (95.1 + passShift * 0.08).toFixed(1),
         highManual: (95.8 + passShift * 0.08).toFixed(1),
         lowName: 'Lương Thị Quỳnh Anh',
-        lowBot: (62.8 + passShift * 0.08).toFixed(1),
         lowManual: (64.5 + passShift * 0.08).toFixed(1),
       },
       {
         highName: 'Trần Bích Huyền',
-        highBot: (93.8 + passShift * 0.08).toFixed(1),
         highManual: (94.6 + passShift * 0.08).toFixed(1),
         lowName: 'Nguyễn Kim Trang',
-        lowBot: (61.5 + passShift * 0.08).toFixed(1),
         lowManual: (63.1 + passShift * 0.08).toFixed(1),
       },
       {
         highName: 'Vũ Trung Kiên',
-        highBot: (92.4 + passShift * 0.08).toFixed(1),
         highManual: (93.0 + passShift * 0.08).toFixed(1),
         lowName: 'Đặng Ánh Vân',
-        lowBot: (59.4 + passShift * 0.08).toFixed(1),
         lowManual: (61.2 + passShift * 0.08).toFixed(1),
       },
       {
         highName: 'Nguyễn Thị Thảo Ly',
-        highBot: (91.2 + passShift * 0.08).toFixed(1),
         highManual: (92.0 + passShift * 0.08).toFixed(1),
         lowName: 'Nguyễn Ngọc Bích',
-        lowBot: (58.0 + passShift * 0.08).toFixed(1),
         lowManual: (60.4 + passShift * 0.08).toFixed(1),
       },
     ],
@@ -325,20 +288,19 @@ export const QualityAssuranceDashboard: React.FC<
   }, [filterFactor, unit]);
 
   const handleResetAndRefresh = () => {
-    setPeriod('Ngày');
+    setPeriod('Hôm nay');
     setSource('Tất cả');
     setChannel('Tất cả');
     setUnit('Tất cả');
-    setAgent('Tất cả');
     onRefresh?.();
     onNotify?.('Đã làm mới dữ liệu báo cáo Quality Assurance.');
   };
 
   return (
     <div className="space-y-4">
-      {/* Top 5-Filter Bar + "Làm mới" matching screenshot 1 */}
+      {/* Top 4-Filter Bar + "Làm mới" */}
       <section className="rounded-xl border border-[#E5E9F2] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
           <div>
             <label
               htmlFor="qa-filter-period"
@@ -352,10 +314,12 @@ export const QualityAssuranceDashboard: React.FC<
               onChange={(e) => setPeriod(e.target.value as PeriodOption)}
               className="w-full h-9 px-3 rounded-lg border border-[#DCE3EE] bg-white text-[13px] text-slate-700 focus:outline-none focus:border-[#3B6ED5]"
             >
-              <option value="Ngày">Ngày</option>
-              <option value="Tuần">Tuần</option>
-              <option value="Tháng">Tháng</option>
-              <option value="Quý">Quý</option>
+              <option value="Hôm nay">Hôm nay</option>
+              <option value="Hôm qua">Hôm qua</option>
+              <option value="7 ngày gần nhất">7 ngày gần nhất</option>
+              <option value="Tháng này">Tháng này</option>
+              <option value="Tháng trước">Tháng trước</option>
+              <option value="Quý này">Quý này</option>
             </select>
           </div>
 
@@ -420,26 +384,6 @@ export const QualityAssuranceDashboard: React.FC<
             </select>
           </div>
 
-          <div>
-            <label
-              htmlFor="qa-filter-agent"
-              className="block text-[12px] font-semibold text-[#1E3A5F] mb-1.5"
-            >
-              Agent
-            </label>
-            <select
-              id="qa-filter-agent"
-              value={agent}
-              onChange={(e) => setAgent(e.target.value)}
-              className="w-full h-9 px-3 rounded-lg border border-[#DCE3EE] bg-white text-[13px] text-slate-700 focus:outline-none focus:border-[#3B6ED5]"
-            >
-              {AGENTS.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
 
         <div className="mt-3 flex justify-end">
@@ -457,88 +401,73 @@ export const QualityAssuranceDashboard: React.FC<
         </div>
       </section>
 
-      {/* Row 1: 2 Pie Charts — Kết quả đánh giá chất lượng tự động & thủ công */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {[
-          {
-            title: 'Kết quả đánh giá chất lượng tự động',
-            data: autoPieData,
-          },
-          {
-            title: 'Kết quả đánh giá chất lượng thủ công',
-            data: manualPieData,
-          },
-        ].map((panel) => (
-          <section
-            key={panel.title}
-            className="rounded-xl border border-[#E5E9F2] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
-          >
-            <h2 className="text-[16px] font-bold text-[#1E293B] text-center mb-3">
-              {panel.title}
-            </h2>
+      {/* Row 1: Kết quả đánh giá chất lượng */}
+      <section className="rounded-xl border border-[#E5E9F2] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        <h2 className="text-[16px] font-bold text-[#1E293B] text-center mb-3">
+          Kết quả đánh giá chất lượng
+        </h2>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-5">
-              <div className="w-[240px] h-[240px] shrink-0">
-                <ResponsiveContainer width="100%" height={240}>
-                  <PieChart>
-                    <Pie
-                      data={panel.data}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      startAngle={90}
-                      endAngle={-270}
-                      outerRadius={104}
-                      stroke="#FFFFFF"
-                      strokeWidth={2}
-                      labelLine={false}
-                      label={renderPiePercentLabel}
-                    >
-                      {panel.data.map((entry) => (
-                        <Cell key={entry.name} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#FFFFFF',
-                        border: '1px solid #E2E8F0',
-                        borderRadius: '8px',
-                        fontSize: '12px',
-                        boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
-                      }}
-                      formatter={(val, name) => [
-                        `${val ?? 0}%`,
-                        String(name ?? ''),
-                      ]}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-8">
+          <div className="w-[240px] h-[240px] shrink-0">
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie
+                  data={manualPieData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  startAngle={90}
+                  endAngle={-270}
+                  outerRadius={104}
+                  stroke="#FFFFFF"
+                  strokeWidth={2}
+                  labelLine={false}
+                  label={renderPiePercentLabel}
+                  isAnimationActive={false}
+                >
+                  {manualPieData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#FFFFFF',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
+                  }}
+                  formatter={(val, name) => [
+                    `${val ?? 0}%`,
+                    String(name ?? ''),
+                  ]}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
 
-              <div className="space-y-3 max-w-[230px]">
-                {panel.data.map((slice) => (
-                  <div
-                    key={slice.name}
-                    className="flex items-start gap-2.5 text-[12.5px] text-slate-700 leading-snug"
-                  >
-                    <span
-                      className="w-3 h-3 rounded-[2px] mt-0.5 shrink-0"
-                      style={{ backgroundColor: slice.color }}
-                    />
-                    <div>
-                      <span className="font-medium">{slice.name}</span>
-                      <span className="ml-1.5 font-mono font-bold text-slate-900 tabular-nums">
-                        ({slice.value}%)
-                      </span>
-                    </div>
-                  </div>
-                ))}
+          <div className="space-y-3 max-w-[260px]">
+            {manualPieData.map((slice) => (
+              <div
+                key={slice.name}
+                className="flex items-start gap-2.5 text-[12.5px] text-slate-700 leading-snug"
+              >
+                <span
+                  className="w-3 h-3 rounded-[2px] mt-0.5 shrink-0"
+                  style={{ backgroundColor: slice.color }}
+                />
+                <div>
+                  <span className="font-medium">{slice.name}</span>
+                  <span className="ml-1.5 font-mono font-bold text-slate-900 tabular-nums">
+                    ({slice.value}%)
+                  </span>
+                </div>
               </div>
-            </div>
-          </section>
-        ))}
-      </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* Row 2: Top 5 theo Chi nhánh & Top 5 theo Agent */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -549,20 +478,18 @@ export const QualityAssuranceDashboard: React.FC<
           </h2>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-center border-collapse min-w-[540px] text-[12.5px]">
+            <table className="w-full text-center border-collapse min-w-[420px] text-[12.5px]">
               <thead>
                 <tr className="bg-[#E9EEF5] text-[#1E3A5F] font-semibold">
                   <th className="py-2.5 px-2.5 text-left rounded-l-md">
                     CN điểm cao
                   </th>
-                  <th className="py-2.5 px-2">Điểm TB (Bot chấm)</th>
                   <th className="py-2.5 px-2 border-r border-slate-300/70">
-                    Điểm TB (Người chấm)
+                    Điểm TB
                   </th>
                   <th className="py-2.5 px-2.5 text-left">CN điểm thấp</th>
-                  <th className="py-2.5 px-2">Điểm TB (Bot chấm)</th>
                   <th className="py-2.5 px-2 rounded-r-md">
-                    Điểm TB (Người chấm)
+                    Điểm TB
                   </th>
                 </tr>
               </thead>
@@ -575,17 +502,11 @@ export const QualityAssuranceDashboard: React.FC<
                     <td className="py-2.5 px-2.5 text-left font-semibold text-slate-800">
                       {row.highName}
                     </td>
-                    <td className="py-2.5 px-2 font-mono font-semibold text-[#15803D] tabular-nums">
-                      {row.highBot}
-                    </td>
                     <td className="py-2.5 px-2 font-mono font-semibold text-[#15803D] tabular-nums border-r border-slate-100">
                       {row.highManual}
                     </td>
                     <td className="py-2.5 px-2.5 text-left font-medium text-slate-700">
                       {row.lowName}
-                    </td>
-                    <td className="py-2.5 px-2 font-mono font-semibold text-[#DC2626] tabular-nums">
-                      {row.lowBot}
                     </td>
                     <td className="py-2.5 px-2 font-mono font-semibold text-[#DC2626] tabular-nums">
                       {row.lowManual}
@@ -604,20 +525,18 @@ export const QualityAssuranceDashboard: React.FC<
           </h2>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-center border-collapse min-w-[560px] text-[12.5px]">
+            <table className="w-full text-center border-collapse min-w-[440px] text-[12.5px]">
               <thead>
                 <tr className="bg-[#E9EEF5] text-[#1E3A5F] font-semibold">
                   <th className="py-2.5 px-2.5 text-left rounded-l-md">
                     Agent điểm cao
                   </th>
-                  <th className="py-2.5 px-2">Điểm TB (Bot chấm)</th>
                   <th className="py-2.5 px-2 border-r border-slate-300/70">
-                    Điểm TB (Người chấm)
+                    Điểm TB
                   </th>
                   <th className="py-2.5 px-2.5 text-left">Agent điểm thấp</th>
-                  <th className="py-2.5 px-2">Điểm TB (Bot chấm)</th>
                   <th className="py-2.5 px-2 rounded-r-md">
-                    Điểm TB (Người chấm)
+                    Điểm TB
                   </th>
                 </tr>
               </thead>
@@ -630,17 +549,11 @@ export const QualityAssuranceDashboard: React.FC<
                     <td className="py-2.5 px-2.5 text-left font-semibold text-slate-800 whitespace-nowrap">
                       {row.highName}
                     </td>
-                    <td className="py-2.5 px-2 font-mono font-semibold text-[#15803D] tabular-nums">
-                      {row.highBot}
-                    </td>
                     <td className="py-2.5 px-2 font-mono font-semibold text-[#15803D] tabular-nums border-r border-slate-100">
                       {row.highManual}
                     </td>
                     <td className="py-2.5 px-2.5 text-left font-medium text-slate-700 whitespace-nowrap">
                       {row.lowName}
-                    </td>
-                    <td className="py-2.5 px-2 font-mono font-semibold text-[#DC2626] tabular-nums">
-                      {row.lowBot}
                     </td>
                     <td className="py-2.5 px-2 font-mono font-semibold text-[#DC2626] tabular-nums">
                       {row.lowManual}
@@ -722,6 +635,7 @@ export const QualityAssuranceDashboard: React.FC<
                   fill="#817CE0"
                   radius={[3, 3, 0, 0]}
                   maxBarSize={18}
+                  isAnimationActive={false}
                 >
                   <LabelList
                     dataKey="skill"
@@ -736,6 +650,7 @@ export const QualityAssuranceDashboard: React.FC<
                   fill="#6EC995"
                   radius={[3, 3, 0, 0]}
                   maxBarSize={18}
+                  isAnimationActive={false}
                 >
                   <LabelList
                     dataKey="process"
@@ -750,6 +665,7 @@ export const QualityAssuranceDashboard: React.FC<
                   fill="#F9BE4F"
                   radius={[3, 3, 0, 0]}
                   maxBarSize={18}
+                  isAnimationActive={false}
                 >
                   <LabelList
                     dataKey="attitude"
@@ -764,6 +680,7 @@ export const QualityAssuranceDashboard: React.FC<
                   fill="#F66D6D"
                   radius={[3, 3, 0, 0]}
                   maxBarSize={18}
+                  isAnimationActive={false}
                 >
                   <LabelList
                     dataKey="logging"

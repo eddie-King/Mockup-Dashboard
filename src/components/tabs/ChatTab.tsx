@@ -183,7 +183,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
             <div className="text-[11px] font-bold tracking-wider text-slate-500 uppercase">
               TỔNG CHAT VÀO
             </div>
-            <div className="mt-2 text-[28px] leading-none font-extrabold text-[#1E293B] tabular-nums">
+            <div className="mt-2 text-[28px] leading-none font-extrabold text-[#0F172A] tabular-nums">
               {filteredStats.totalIncoming.toLocaleString('vi-VN')}
             </div>
             <div className="mt-2 text-[11.5px] text-slate-400">
@@ -196,7 +196,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
             <div className="text-[11px] font-bold tracking-wider text-slate-500 uppercase">
               ĐÃ NHẬN
             </div>
-            <div className="mt-2 text-[28px] leading-none font-extrabold text-[#16A34A] tabular-nums">
+            <div className="mt-2 text-[28px] leading-none font-extrabold text-[#0F172A] tabular-nums">
               {filteredStats.accepted.toLocaleString('vi-VN')}
             </div>
             <div className="mt-2 text-[11.5px] text-slate-400">
@@ -209,7 +209,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
             <div className="text-[11px] font-bold tracking-wider text-slate-500 uppercase">
               AWT
             </div>
-            <div className="mt-2 text-[28px] leading-none font-extrabold font-mono text-[#EA580C] tabular-nums">
+            <div className="mt-2 text-[28px] leading-none font-extrabold font-mono text-[#0F172A] tabular-nums">
               {formatDuration(filteredStats.awtSec)}
             </div>
             <div className="mt-2 text-[11.5px] text-slate-400">
@@ -222,7 +222,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
             <div className="text-[11px] font-bold tracking-wider text-slate-500 uppercase">
               PHẢN HỒI ĐẦU
             </div>
-            <div className="mt-2 text-[28px] leading-none font-extrabold font-mono text-[#16A34A] tabular-nums">
+            <div className="mt-2 text-[28px] leading-none font-extrabold font-mono text-[#0F172A] tabular-nums">
               {formatDuration(filteredStats.frtSec)}
             </div>
             <div className="mt-2 text-[11.5px] text-slate-400">
@@ -235,7 +235,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
             <div className="text-[11px] font-bold tracking-wider text-slate-500 uppercase">
               SLA %
             </div>
-            <div className="mt-2 text-[28px] leading-none font-extrabold text-[#1E293B] tabular-nums">
+            <div className="mt-2 text-[28px] leading-none font-extrabold text-[#0F172A] tabular-nums">
               {filteredStats.slaPercent.toFixed(1)}%
             </div>
             <div className="mt-2 text-[11.5px] text-slate-400">
@@ -316,7 +316,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
                 <div className="text-[10.5px] font-bold tracking-wider text-slate-500 uppercase">
                   AVAILABLE SLOTS
                 </div>
-                <div className="mt-1 text-[22px] font-extrabold text-[#16A34A] tabular-nums">
+                <div className="mt-1 text-[22px] font-extrabold text-[#0F172A] tabular-nums">
                   {totals.availableSlots}
                 </div>
                 <div className="mt-1 text-[11px] text-slate-400 leading-tight">
@@ -329,15 +329,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
                 <div className="text-[10.5px] font-bold tracking-wider text-slate-500 uppercase">
                   OCCUPANCY %
                 </div>
-                <div
-                  className={`mt-1 text-[22px] font-extrabold tabular-nums ${
-                    totals.occupancy >= 85
-                      ? 'text-red-600'
-                      : totals.occupancy >= 70
-                      ? 'text-amber-600'
-                      : 'text-[#16A34A]'
-                  }`}
-                >
+                <div className="mt-1 text-[22px] font-extrabold text-[#0F172A] tabular-nums">
                   {totals.occupancy}%
                 </div>
                 <div className="mt-1 text-[11px] text-slate-400 leading-tight">
@@ -350,11 +342,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
                 <div className="text-[10.5px] font-bold tracking-wider text-slate-500 uppercase">
                   LONGEST WAIT
                 </div>
-                <div
-                  className={`mt-1 text-[21px] font-extrabold font-mono tabular-nums ${
-                    totals.longestWaitSec >= 60 ? 'text-[#DC2626]' : 'text-[#0F172A]'
-                  }`}
-                >
+                <div className="mt-1 text-[21px] font-extrabold font-mono text-[#DC2626] tabular-nums">
                   {formatHms(totals.longestWaitSec)}
                 </div>
                 <div className="mt-1 text-[11px] text-slate-400 leading-tight">
@@ -436,6 +424,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
                     stroke="#2563EB"
                     strokeWidth={2}
                     fill="url(#chatDemandFill)"
+                    isAnimationActive={false}
                   />
                   <Line
                     type="monotone"
@@ -444,6 +433,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
                     strokeWidth={2.2}
                     strokeDasharray="5 5"
                     dot={false}
+                    isAnimationActive={false}
                   />
                 </ComposedChart>
               </ResponsiveContainer>

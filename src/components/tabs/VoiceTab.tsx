@@ -109,58 +109,7 @@ export const VoiceTab: React.FC<VoiceTabProps> = ({
 
   const detailsSectionRef = useRef<HTMLElement | null>(null);
 
-  // Live 1-second timer tick for CMS AgentTime & DURATION columns + subtle KPI pulse
-  useEffect(() => {
-    if (!isLive) return;
-    let tickCount = 0;
-    const timer = window.setInterval(() => {
-      tickCount += 1;
-
-      setGroups((prev) =>
-        prev.map((grp) => ({
-          ...grp,
-          rows: grp.rows.map((row) => ({
-            ...row,
-            agentTimeSec: row.agentTimeSec + 1,
-            durationSec: row.durationSec + 1,
-          })),
-        }))
-      );
-
-      setDetails((prev) =>
-        prev.map((row) => ({
-          ...row,
-          agentTimeSec: row.agentTimeSec + 1,
-          durationSec:
-            row.durationSec > 0 || row.callDirection !== ''
-              ? row.durationSec + 1
-              : 0,
-        }))
-      );
-
-      // Gentle realistic oscillation every 5 seconds anchored near screenshot metrics
-      if (tickCount % 5 === 0) {
-        setKpi((prev) => {
-          const deltaAcd = tickCount % 10 === 0 ? 1 : -1;
-          const nextAcd = Math.max(29, Math.min(35, prev.agentAcd + deltaAcd));
-          const nextAvail = Math.max(
-            8,
-            Math.min(14, prev.agentLogin - prev.agentAux - nextAcd - prev.agentAcw)
-          );
-          const nextConnected = Math.max(27, Math.min(33, nextAcd - 2));
-          return {
-            ...prev,
-            agentAcd: nextAcd,
-            agentAvail: nextAvail,
-            inboundConnectedCalls: nextConnected,
-            inboundCurrentCall: nextConnected + 1,
-          };
-        });
-      }
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, [isLive]);
+  // Static snapshot by default; updates only on explicit filter or manual refresh
 
   const chartData = useMemo(() => {
     if (range === '30m') {

@@ -11,6 +11,8 @@ import {
 } from '../data/mockDashboardData';
 import { OverviewTab } from './tabs/OverviewTab';
 
+import { RefreshIntervalKey } from './OmniDashboard';
+
 interface GeneralDashboardProps {
   timeframe: TimeframeKey;
   onChangeTimeframe: (tf: TimeframeKey) => void;
@@ -19,6 +21,8 @@ interface GeneralDashboardProps {
   onToggleLive: () => void;
   isRefreshing: boolean;
   onRefresh: () => void;
+  refreshInterval: RefreshIntervalKey;
+  onChangeRefreshInterval: (val: RefreshIntervalKey) => void;
   onExportCsv: () => void;
   system: SystemOverviewMetrics;
   onNavigateToOmniTab: (tab: DashboardTabId) => void;
@@ -32,6 +36,8 @@ export const GeneralDashboard: React.FC<GeneralDashboardProps> = ({
   onToggleLive,
   isRefreshing,
   onRefresh,
+  refreshInterval,
+  onChangeRefreshInterval,
   onExportCsv,
   system,
   onNavigateToOmniTab,
@@ -77,20 +83,36 @@ export const GeneralDashboard: React.FC<GeneralDashboardProps> = ({
           </div>
         </div>
 
-        {/* Right Controls: Refresh + Export */}
+        {/* Right Controls: Refresh Interval + Export */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="h-[36px] w-[36px] rounded-lg border border-[#DCE3EE] bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 shrink-0"
-            title="Làm mới dữ liệu ngay"
-            aria-label="Làm mới dữ liệu"
-          >
-            <RotateCw
-              size={15}
-              className={isRefreshing ? 'animate-spin text-[#F05A28]' : ''}
-            />
-          </button>
+          <div className="inline-flex items-center h-[36px] rounded-lg border border-[#DCE3EE] bg-white overflow-hidden shrink-0">
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="h-full px-2.5 text-slate-600 hover:bg-slate-50 hover:text-slate-900 border-r border-[#DCE3EE] inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+              title="Làm mới dữ liệu ngay"
+              aria-label="Làm mới dữ liệu"
+            >
+              <RotateCw
+                size={15}
+                className={isRefreshing ? 'animate-spin text-[#F05A28]' : ''}
+              />
+            </button>
+            <select
+              aria-label="Chu kỳ cập nhật tự động"
+              value={refreshInterval}
+              onChange={(e) =>
+                onChangeRefreshInterval(e.target.value as RefreshIntervalKey)
+              }
+              className="h-full px-2.5 bg-white text-[12.5px] font-mono font-semibold text-slate-700 focus:outline-none cursor-pointer"
+            >
+              <option value="15s">15s</option>
+              <option value="30s">30s</option>
+              <option value="1m">1m</option>
+              <option value="5m">5m</option>
+              <option value="off">Tắt</option>
+            </select>
+          </div>
 
           <button
             type="button"

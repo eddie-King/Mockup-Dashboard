@@ -152,6 +152,7 @@ const DonutWidget: React.FC<DonutWidgetProps> = ({
                 paddingAngle={1.5}
                 stroke="#FFFFFF"
                 strokeWidth={2}
+                isAnimationActive={false}
               >
                 {data.map((entry) => (
                   <Cell key={entry.name} fill={entry.color} />
@@ -446,18 +447,21 @@ export const EmailTab: React.FC<EmailTabProps> = ({
                     fill="#2563EB"
                     radius={[4, 4, 0, 0]}
                     maxBarSize={28}
+                    isAnimationActive={false}
                   />
                   <Bar
                     dataKey="unassigned"
                     fill="#F05A28"
                     radius={[4, 4, 0, 0]}
                     maxBarSize={18}
+                    isAnimationActive={false}
                   />
                   <Bar
                     dataKey="spam"
                     fill="#94A3B8"
                     radius={[4, 4, 0, 0]}
                     maxBarSize={14}
+                    isAnimationActive={false}
                   />
                 </BarChart>
               ) : (
@@ -512,6 +516,7 @@ export const EmailTab: React.FC<EmailTabProps> = ({
                     stroke="#2563EB"
                     strokeWidth={2}
                     fill="url(#emailAcceptedGrad)"
+                    isAnimationActive={false}
                   />
                   <Area
                     type="monotone"
@@ -519,6 +524,7 @@ export const EmailTab: React.FC<EmailTabProps> = ({
                     stroke="#F05A28"
                     strokeWidth={2}
                     fill="url(#emailUnassignedGrad)"
+                    isAnimationActive={false}
                   />
                 </AreaChart>
               )}

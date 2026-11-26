@@ -37,7 +37,7 @@ import {
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { RightRail } from './components/RightRail';
-import { OmniDashboard } from './components/OmniDashboard';
+import { OmniDashboard, RefreshIntervalKey } from './components/OmniDashboard';
 import { GeneralDashboard } from './components/GeneralDashboard';
 import { QualityAssuranceDashboard } from './components/QualityAssuranceDashboard';
 import { WorkforceManagementDashboard } from './components/WorkforceManagementDashboard';
@@ -87,6 +87,7 @@ export default function App() {
   // Realtime simulation state
   const [isLive, setIsLive] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshInterval, setRefreshInterval] = useState<RefreshIntervalKey>('1m');
   const [clockText, setClockText] = useState(() => {
     const now = new Date();
     return `${String(now.getHours()).padStart(2, '0')}:${String(
@@ -128,87 +129,29 @@ export default function App() {
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  // 1-second live clock & duration counters
+  // Scheduled auto-refresh based on selected interval (15s / 30s / 1m / 5m)
   useEffect(() => {
+    if (!isLive || refreshInterval === 'off') return;
+    const msMap: Record<Exclude<RefreshIntervalKey, 'off'>, number> = {
+      '15s': 15_000,
+      '30s': 30_000,
+      '1m': 60_000,
+      '5m': 300_000,
+    };
+    const intervalMs = msMap[refreshInterval];
     const timer = window.setInterval(() => {
+      setIsRefreshing(true);
       const now = new Date();
       setClockText(
         `${String(now.getHours()).padStart(2, '0')}:${String(
           now.getMinutes()
         ).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
       );
-
-      if (!isLive) return;
-
-      setLiveCalls((prev) =>
-        prev.map((c) => ({ ...c, durationSec: c.durationSec + 1 }))
-      );
-      setChats((prev) =>
-        prev.map((c) => ({ ...c, durationSec: c.durationSec + 1 }))
-      );
-      setAgents((prev) =>
-        prev.map((a) => ({ ...a, stateDurationSec: a.stateDurationSec + 1 }))
-      );
-      setQueues((prev) =>
-        prev.map((q) => ({
-          ...q,
-          longestWaitSec:
-            q.waiting > 0
-              ? q.longestWaitSec >= q.thresholdSec + 18
-                ? Math.max(8, q.thresholdSec - 16)
-                : q.longestWaitSec + 1
-              : 0,
-        }))
-      );
-      setWaitingCalls((prev) =>
-        prev.map((wc) => {
-          const nextSec = wc.waitSec + 1;
-          return {
-            ...wc,
-            waitSec: nextSec,
-            status:
-              wc.status === 'Ưu tiên VIP'
-                ? 'Ưu tiên VIP'
-                : nextSec >= 40
-                ? 'Chờ lâu'
-                : 'Đang chờ',
-          };
-        })
-      );
-      setChatQueues((prev) =>
-        prev.map((cq) => ({
-          ...cq,
-          longestWaitSec: cq.inQueue > 0 ? cq.longestWaitSec + 1 : 0,
-        }))
-      );
-      setMonitorAgents((prev) =>
-        prev.map((ma) => ({
-          ...ma,
-          stateDurationSec: ma.stateDurationSec + 1,
-          voiceCallDurationSec:
-            ma.voiceState === 'In call' && ma.voiceCallDurationSec !== null
-              ? ma.voiceCallDurationSec + 1
-              : ma.voiceCallDurationSec,
-        }))
-      );
-    }, 1000);
+      window.setTimeout(() => setIsRefreshing(false), 450);
+    }, intervalMs);
 
     return () => window.clearInterval(timer);
-  }, [isLive]);
-
-  // Gentle 4-second live traffic fluctuation
-  useEffect(() => {
-    if (!isLive) return;
-    const pulse = window.setInterval(() => {
-      setLiveDelta((prev) => ({
-        voiceAvail: (prev.voiceAvail + 1) % 3 === 0 ? 1 : 0,
-        chatAvail: (prev.chatAvail + 1) % 2 === 0 ? 1 : -1,
-        emailAvail: prev.emailAvail === 0 ? 1 : 0,
-        interactions: prev.interactions + 2,
-      }));
-    }, 4000);
-    return () => window.clearInterval(pulse);
-  }, [isLive]);
+  }, [isLive, refreshInterval]);
 
   const activeMenuInfo = useMemo(
     () => findMenuItemWithPath(activeMenuId),
@@ -268,10 +211,12 @@ export default function App() {
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    setLiveDelta((prev) => ({
-      ...prev,
-      interactions: prev.interactions + 3,
-    }));
+    const now = new Date();
+    setClockText(
+      `${String(now.getHours()).padStart(2, '0')}:${String(
+        now.getMinutes()
+      ).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
+    );
     window.setTimeout(() => {
       setIsRefreshing(false);
       showToast('Đã đồng bộ dữ liệu thời gian thực mới nhất.');
@@ -586,6 +531,15 @@ export default function App() {
                 }}
                 isRefreshing={isRefreshing}
                 onRefresh={handleRefresh}
+                refreshInterval={refreshInterval}
+                onChangeRefreshInterval={(val) => {
+                  setRefreshInterval(val);
+                  showToast(
+                    val === 'off'
+                      ? 'Đã tắt tự động làm mới dữ liệu.'
+                      : `Đã đặt chu kỳ tự động làm mới mỗi ${val}.`
+                  );
+                }}
                 onExportCsv={handleExportCsv}
                 system={computedSystem}
                 onNavigateToOmniTab={(tab) => handleGoToOmni(tab)}
@@ -619,6 +573,15 @@ export default function App() {
                 }}
                 isRefreshing={isRefreshing}
                 onRefresh={handleRefresh}
+                refreshInterval={refreshInterval}
+                onChangeRefreshInterval={(val) => {
+                  setRefreshInterval(val);
+                  showToast(
+                    val === 'off'
+                      ? 'Đã tắt tự động làm mới dữ liệu.'
+                      : `Đã đặt chu kỳ tự động làm mới mỗi ${val}.`
+                  );
+                }}
                 onExportCsv={handleExportCsv}
                 system={computedSystem}
                 summary={computedSummary}

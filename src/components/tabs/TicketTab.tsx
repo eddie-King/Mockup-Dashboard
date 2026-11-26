@@ -516,6 +516,7 @@ export const TicketTab: React.FC<TicketTabProps> = ({
                       strokeWidth: 2,
                     }}
                     activeDot={{ r: 5, fill: '#F4C430' }}
+                    isAnimationActive={false}
                   >
                     <LabelList
                       dataKey="count"
@@ -541,6 +542,7 @@ export const TicketTab: React.FC<TicketTabProps> = ({
                       strokeWidth: 1.8,
                     }}
                     activeDot={{ r: 4.5, fill: '#E54D4D' }}
+                    isAnimationActive={false}
                   />
                 )}
               </ComposedChart>
@@ -639,6 +641,7 @@ export const TicketTab: React.FC<TicketTabProps> = ({
                   fill="#67C7D8"
                   radius={[0, 4, 4, 0]}
                   maxBarSize={20}
+                  isAnimationActive={false}
                 >
                   <LabelList
                     dataKey="count"
@@ -687,6 +690,7 @@ export const TicketTab: React.FC<TicketTabProps> = ({
                     paddingAngle={1.5}
                     stroke="#FFFFFF"
                     strokeWidth={2}
+                    isAnimationActive={false}
                   >
                     {data.channels.map((entry) => (
                       <Cell key={entry.name} fill={entry.color} />

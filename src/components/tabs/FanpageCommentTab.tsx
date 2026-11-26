@@ -427,18 +427,21 @@ export const FanpageCommentTab: React.FC<FanpageCommentTabProps> = ({
                     fill="#16A34A"
                     radius={[4, 4, 0, 0]}
                     maxBarSize={28}
+                    isAnimationActive={false}
                   />
                   <Bar
                     dataKey="unreplied"
                     fill="#F05A28"
                     radius={[4, 4, 0, 0]}
                     maxBarSize={18}
+                    isAnimationActive={false}
                   />
                   <Bar
                     dataKey="spam"
                     fill="#94A3B8"
                     radius={[4, 4, 0, 0]}
                     maxBarSize={14}
+                    isAnimationActive={false}
                   />
                 </BarChart>
               ) : (
@@ -493,6 +496,7 @@ export const FanpageCommentTab: React.FC<FanpageCommentTabProps> = ({
                     stroke="#16A34A"
                     strokeWidth={2}
                     fill="url(#fpRepliedGrad)"
+                    isAnimationActive={false}
                   />
                   <Area
                     type="monotone"
@@ -500,6 +504,7 @@ export const FanpageCommentTab: React.FC<FanpageCommentTabProps> = ({
                     stroke="#F05A28"
                     strokeWidth={2}
                     fill="url(#fpUnrepliedGrad)"
+                    isAnimationActive={false}
                   />
                 </AreaChart>
               )}
@@ -539,6 +544,7 @@ export const FanpageCommentTab: React.FC<FanpageCommentTabProps> = ({
                     paddingAngle={1.5}
                     stroke="#FFFFFF"
                     strokeWidth={2}
+                    isAnimationActive={false}
                   >
                     {donutSlices.map((entry) => (
                       <Cell key={entry.name} fill={entry.color} />

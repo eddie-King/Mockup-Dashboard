@@ -42,6 +42,7 @@ import {
 } from '../data/chatSessionsData';
 import { stripVietnameseAccents } from '../data/menuConfig';
 import { ChatCrmPanel } from './ChatCrmPanel';
+import { ChatTicketPanel } from './ChatTicketPanel';
 
 interface ChatSessionsWorkspaceProps {
   onNotify?: (msg: string) => void;
@@ -198,6 +199,10 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
   const [pendingAttachment, setPendingAttachment] = useState<string | null>(null);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+
+  // Docked Ticket Workspace state (keeps Chat pane completely intact while handling Ticket)
+  const [ticketWorkspaceOpen, setTicketWorkspaceOpen] = useState(false);
+  const [activeTicketCode, setActiveTicketCode] = useState<string | null>(null);
 
   // Modals
   const [modalMode, setModalMode] = useState<ModalMode>(null);
@@ -965,8 +970,128 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
     setModalMode(null);
   };
 
-  const showLeftPane = layoutMode !== 'focus';
-  const showRightPane = layoutMode === 'three-pane';
+  const handleOpenTicketWorkspace = (ticketCode: string | null = null) => {
+    setActiveTicketCode(ticketCode);
+    setTicketWorkspaceOpen(true);
+  };
+
+  const handleSaveTicketFromWorkspace = (payload: {
+    code: string;
+    isNewDraft: boolean;
+    status: string;
+    priority: 'Cao' | 'Trung bình' | 'Thấp';
+    workcode: string;
+    unit: string;
+    assignee: string;
+    requestText: string;
+    resolutionText: string;
+    action: 'save' | 'save-close' | 'save-transfer';
+  }): string => {
+    const nowHm = getNowHm();
+    const generatedCode = payload.isNewDraft
+      ? `TK-${Math.floor(2611300 + Math.random() * 600)}`
+      : payload.code;
+
+    if (activeCustomer) {
+      setTicketsByCustomer((prev) => {
+        const currentList = prev[activeCustomer.id] ?? [];
+        const exists = currentList.some((t) => t.code === generatedCode);
+        const mappedStatus =
+          payload.status === 'Hoàn thành' ? 'Hoàn thành' : 'Đang xử lý';
+
+        if (exists) {
+          return {
+            ...prev,
+            [activeCustomer.id]: currentList.map((t) =>
+              t.code === generatedCode
+                ? {
+                    ...t,
+                    subject: payload.requestText,
+                    status: mappedStatus,
+                    priority: payload.priority,
+                  }
+                : t
+            ),
+          };
+        }
+
+        const newTicket: TicketContactItem = {
+          code: generatedCode,
+          subject: payload.requestText,
+          channel: selectedSession?.channelLabel || 'Chat',
+          createdAt: getNowFullDateTime(),
+          status: mappedStatus,
+          priority: payload.priority,
+          outboundCalls: [],
+        };
+        return {
+          ...prev,
+          [activeCustomer.id]: [newTicket, ...currentList],
+        };
+      });
+    }
+
+    if (selectedSession) {
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === selectedSession.id
+            ? {
+                ...s,
+                workcode: payload.workcode,
+                messages: [
+                  ...s.messages,
+                  {
+                    id: `m-tk-${Date.now()}`,
+                    sender: 'system',
+                    time: nowHm,
+                    text: `${
+                      payload.action === 'save-transfer'
+                        ? `Lưu & chuyển CN (${payload.unit})`
+                        : payload.action === 'save-close'
+                        ? 'Lưu & Đóng phiếu'
+                        : 'Lưu phiếu'
+                    } ${generatedCode} · ${payload.workcode}`,
+                  },
+                ],
+              }
+            : s
+        )
+      );
+    }
+
+    onNotify?.(
+      payload.action === 'save-transfer'
+        ? `Đã lưu phiếu ${generatedCode} và chuyển xử lý tới ${payload.unit}.`
+        : payload.action === 'save-close'
+        ? `Đã lưu & đóng phiếu ${generatedCode} vào Lịch sử liên hệ.`
+        : `Đã lưu phiếu ${generatedCode} (khung chat vẫn mở song song với khách hàng).`
+    );
+
+    if (payload.action === 'save-close') {
+      setTicketWorkspaceOpen(false);
+    }
+    return generatedCode;
+  };
+
+  const handleSaveCustomerFromTicket = (patch: Partial<LinkedCustomerProfile>) => {
+    if (!selectedSession || !activeCustomer) return;
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === selectedSession.id
+          ? {
+              ...s,
+              linkedCustomers: s.linkedCustomers.map((c) =>
+                c.id === activeCustomer.id ? { ...c, ...patch } : c
+              ),
+            }
+          : s
+      )
+    );
+    onNotify?.(`Đã cập nhật thông tin khách hàng ${patch.name || activeCustomer.name}.`);
+  };
+
+  const showLeftPane = !ticketWorkspaceOpen && layoutMode !== 'focus';
+  const showRightPane = !ticketWorkspaceOpen && layoutMode === 'three-pane';
 
   const activeSla = selectedSession ? computeSlaInfo(selectedSession) : null;
   const activeCustomerTickets = activeCustomer
@@ -1613,8 +1738,14 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
           </>
         )}
 
-        {/* CENTER PANE: FIXED VERTICAL CHAT WORKSPACE */}
-        <section className="flex-1 min-w-[380px] flex flex-col h-full bg-white overflow-hidden">
+        {/* CENTER PANE: FIXED VERTICAL CHAT WORKSPACE (Always intact, even when Ticket Workspace is open) */}
+        <section
+          className={`${
+            ticketWorkspaceOpen
+              ? 'w-[400px] xl:w-[420px] shrink-0 border-r border-[#E5E9F2]'
+              : 'flex-1 min-w-[380px]'
+          } flex flex-col h-full bg-white overflow-hidden`}
+        >
           {selectedSession && activeCustomer && activeSla ? (
             <>
               {/* Top Session Header */}
@@ -1623,7 +1754,10 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
                   {!showLeftPane && (
                     <button
                       type="button"
-                      onClick={() => setLayoutMode('three-pane')}
+                      onClick={() => {
+                        setTicketWorkspaceOpen(false);
+                        setLayoutMode('three-pane');
+                      }}
                       className="p-1.5 rounded-md border border-[#DCE3EE] text-slate-500 hover:text-[#3B49DF] hover:bg-[#F4F5FC] shrink-0"
                       title="Mở lại danh sách hội thoại"
                     >
@@ -1685,11 +1819,24 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={() => openModal('ticket')}
-                    className="h-7 px-2.5 rounded-md border border-[#DCE3EE] bg-white hover:bg-[#F8FAFC] text-[12px] font-medium text-slate-700 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                    onClick={() => {
+                      if (ticketWorkspaceOpen) {
+                        setTicketWorkspaceOpen(false);
+                      } else {
+                        handleOpenTicketWorkspace(null);
+                      }
+                    }}
+                    className={`h-7 px-2.5 rounded-md border text-[12px] font-medium inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors ${
+                      ticketWorkspaceOpen
+                        ? 'border-[#F05A28] bg-[#FFF5F0] text-[#EA580C]'
+                        : 'border-[#DCE3EE] bg-white hover:bg-[#F8FAFC] text-slate-700'
+                    }`}
                   >
-                    <Ticket size={13} className="text-slate-500" />
-                    <span>Tạo ticket</span>
+                    <Ticket
+                      size={13}
+                      className={ticketWorkspaceOpen ? 'text-[#F05A28]' : 'text-slate-500'}
+                    />
+                    <span>{ticketWorkspaceOpen ? 'Đang mở ticket' : 'Tạo ticket'}</span>
                   </button>
                   <button
                     type="button"
@@ -2086,7 +2233,9 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
                 manualInteractions={activeCustomerManuals}
                 onSwitchCustomer={handleSwitchCustomer}
                 onAddCustomerToSenderId={handleAddCustomerToSenderId}
-                onOpenCreateTicket={() => openModal('ticket')}
+                onUpdateCustomer={handleSaveCustomerFromTicket}
+                onOpenCreateTicket={() => handleOpenTicketWorkspace(null)}
+                onOpenTicketCode={(code) => handleOpenTicketWorkspace(code)}
                 onOpenManualInteraction={() => openModal('manual')}
                 onAddOutboundCallToTicket={handleAddOutboundCallToTicket}
                 onClose={() => setLayoutMode('two-pane')}
@@ -2094,6 +2243,23 @@ export const ChatSessionsWorkspace: React.FC<ChatSessionsWorkspaceProps> = ({
               />
             </div>
           </>
+        )}
+
+        {/* DOCKED FULL TICKET & CUSTOMER WORKSPACE ALONGSIDE INTACT CHAT PANEL */}
+        {ticketWorkspaceOpen && selectedSession && activeCustomer && (
+          <div className="flex-1 min-w-[520px] h-full overflow-hidden">
+            <ChatTicketPanel
+              session={selectedSession}
+              customer={activeCustomer}
+              tickets={activeCustomerTickets}
+              manualInteractions={activeCustomerManuals}
+              initialTicketCode={activeTicketCode}
+              onSaveTicket={handleSaveTicketFromWorkspace}
+              onSaveCustomer={handleSaveCustomerFromTicket}
+              onClose={() => setTicketWorkspaceOpen(false)}
+              onNotify={onNotify}
+            />
+          </div>
         )}
       </div>
 
