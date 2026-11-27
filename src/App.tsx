@@ -540,7 +540,6 @@ export default function App() {
                       : `Đã đặt chu kỳ tự động làm mới mỗi ${val}.`
                   );
                 }}
-                onExportCsv={handleExportCsv}
                 system={computedSystem}
                 onNavigateToOmniTab={(tab) => handleGoToOmni(tab)}
               />

@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Download,
   LineChart,
   Mail,
   MessageSquare,
@@ -254,16 +253,6 @@ export const OmniDashboard: React.FC<OmniDashboardProps> = ({
               <option value="off">Tắt</option>
             </select>
           </div>
-
-          {/* Export CSV Primary CTA */}
-          <button
-            type="button"
-            onClick={onExportCsv}
-            className="h-[36px] px-4 rounded-lg bg-[#F05A28] hover:bg-[#D94A1A] active:bg-[#C24115] text-white text-[13px] font-semibold inline-flex items-center gap-2 shadow-xs transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-orange-500"
-          >
-            <Download size={15} strokeWidth={2.2} />
-            <span>Xuất báo cáo</span>
-          </button>
         </div>
       </div>
 

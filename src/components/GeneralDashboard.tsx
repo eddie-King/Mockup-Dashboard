@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Download,
   LayoutGrid,
   RotateCw,
 } from 'lucide-react';
@@ -23,7 +22,6 @@ interface GeneralDashboardProps {
   onRefresh: () => void;
   refreshInterval: RefreshIntervalKey;
   onChangeRefreshInterval: (val: RefreshIntervalKey) => void;
-  onExportCsv: () => void;
   system: SystemOverviewMetrics;
   onNavigateToOmniTab: (tab: DashboardTabId) => void;
 }
@@ -38,7 +36,6 @@ export const GeneralDashboard: React.FC<GeneralDashboardProps> = ({
   onRefresh,
   refreshInterval,
   onChangeRefreshInterval,
-  onExportCsv,
   system,
   onNavigateToOmniTab,
 }) => {
@@ -113,15 +110,6 @@ export const GeneralDashboard: React.FC<GeneralDashboardProps> = ({
               <option value="off">Tắt</option>
             </select>
           </div>
-
-          <button
-            type="button"
-            onClick={onExportCsv}
-            className="h-[36px] px-4 rounded-lg bg-[#F05A28] hover:bg-[#D94A1A] active:bg-[#C24115] text-white text-[13px] font-semibold inline-flex items-center gap-2 shadow-xs transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-orange-500"
-          >
-            <Download size={15} strokeWidth={2.2} />
-            <span>Xuất báo cáo</span>
-          </button>
         </div>
       </div>
 
