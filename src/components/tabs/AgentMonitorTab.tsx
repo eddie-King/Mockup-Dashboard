@@ -43,7 +43,6 @@ export const AgentMonitorTab: React.FC<AgentMonitorTabProps> = ({
   onNotify,
 }) => {
   const [queueType, setQueueType] = useState<QueueTypeFilter>('ALL');
-  const [selectedQueue, setSelectedQueue] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortStatusAsc, setSortStatusAsc] = useState(true);
   const [pageSize, setPageSize] = useState(10);
@@ -61,19 +60,12 @@ export const AgentMonitorTab: React.FC<AgentMonitorTabProps> = ({
     channel: 'chat' | 'email';
   } | null>(null);
 
-  const allQueues = useMemo(() => {
-    const set = new Set<string>();
-    agents.forEach((a) => a.queues.forEach((q) => set.add(q)));
-    return Array.from(set);
-  }, [agents]);
-
   const filteredAgents = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const list = agents.filter((ag) => {
       if (queueType === 'voice' && !ag.voiceAssigned) return false;
       if (queueType === 'chat' && !ag.chatAssigned) return false;
       if (queueType === 'email' && !ag.emailAssigned) return false;
-      if (selectedQueue !== 'ALL' && !ag.queues.includes(selectedQueue)) return false;
       if (q) {
         const hitName = ag.username.toLowerCase().includes(q);
         const hitExt = ag.ext ? ag.ext.includes(q) : false;
@@ -90,7 +82,7 @@ export const AgentMonitorTab: React.FC<AgentMonitorTabProps> = ({
       }
       return a.status === 'Ready' ? 1 : -1;
     });
-  }, [agents, queueType, selectedQueue, searchQuery, sortStatusAsc]);
+  }, [agents, queueType, searchQuery, sortStatusAsc]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAgents.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
@@ -126,13 +118,13 @@ export const AgentMonitorTab: React.FC<AgentMonitorTabProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Loại queue */}
+          {/* Loại kênh */}
           <div className="flex items-center gap-2">
             <span className="text-[12.5px] font-medium text-slate-600 whitespace-nowrap">
-              Loại queue
+              Loại kênh
             </span>
             <select
-              aria-label="Lọc theo loại queue"
+              aria-label="Lọc theo loại kênh"
               value={queueType}
               onChange={(e) => {
                 setQueueType(e.target.value as QueueTypeFilter);
@@ -144,29 +136,6 @@ export const AgentMonitorTab: React.FC<AgentMonitorTabProps> = ({
               <option value="voice">Voice</option>
               <option value="chat">Chat</option>
               <option value="email">Email</option>
-            </select>
-          </div>
-
-          {/* Queue */}
-          <div className="flex items-center gap-2">
-            <span className="text-[12.5px] font-medium text-slate-600 whitespace-nowrap">
-              Queue
-            </span>
-            <select
-              aria-label="Lọc theo tên queue"
-              value={selectedQueue}
-              onChange={(e) => {
-                setSelectedQueue(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="h-9 min-w-[128px] px-3 text-[12.5px] font-medium text-slate-800 bg-white border border-[#D8DFE9] rounded-lg focus:outline-none focus:border-[#F05A28]"
-            >
-              <option value="ALL">Tất cả</option>
-              {allQueues.map((q) => (
-                <option key={q} value={q}>
-                  {q}
-                </option>
-              ))}
             </select>
           </div>
 
